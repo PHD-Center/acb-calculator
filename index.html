@@ -52,6 +52,7 @@
       <div class="min-w-0 flex-1">
         <h1 id="hdrTitle" class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">抗膽鹼藥物負擔計算器</h1>
         <p id="hdrSub" class="text-xs sm:text-sm text-slate-500 mt-1">Anticholinergic Burden Calculator · 6 種評分量表整合分析</p>
+        <p id="hdrPopulation" class="text-xs text-indigo-700 mt-1">本工具計算結果以 <b>≥65 歲老年族群</b>之研究為依據</p>
       </div>
       <div class="flex bg-white rounded-lg border border-slate-200 shadow-sm flex-shrink-0 text-xs">
         <button type="button" id="langZh" onclick="setLang('zh')" class="px-3 py-1.5 rounded-l-lg transition" style="background:#4f46e5;color:#fff;">中文</button>
@@ -278,6 +279,7 @@ const I18N = {
   zh: {
     title: "抗膽鹼藥物負擔計算器",
     subtitle: "Anticholinergic Burden Calculator · 6 種評分量表整合分析",
+    population: '本工具計算結果以 <b>≥65 歲老年族群</b>之研究為依據',
     disclaimer: "Note: 本工具僅供醫療人員參考。",
     inputLabel: "輸入病人藥物",
     placeholder: "輸入藥名 (e.g. Quetiapine)",
@@ -404,6 +406,7 @@ const I18N = {
   en: {
     title: "Anticholinergic Burden Calculator",
     subtitle: "Anticholinergic Burden Calculator · Integrated 6-scale analysis",
+    population: 'Risk estimates apply to <b>adults aged ≥65 years</b> based on the underlying evidence.',
     disclaimer: "Note: For healthcare professional reference only.",
     inputLabel: "Enter patient medications",
     placeholder: "Drug name (e.g. Quetiapine)",
@@ -552,7 +555,7 @@ function setLang(lang) {
 
 function applyStaticLang() {
   const map = {
-    hdrTitle: 'title', hdrSub: 'subtitle',
+    hdrTitle: 'title', hdrSub: 'subtitle', hdrPopulation: 'population',
     inputLabelEl: 'inputLabel', drugInput: { attr: 'placeholder', key: 'placeholder' },
     addBtnEl: 'addBtn', inputHintEl: 'inputHint',
     methodNoteEl: 'methodNote',
@@ -912,10 +915,7 @@ function ohcaText(acb) {
   if (acb >= 3) {
     return `<p class="font-medium text-amber-900">${t('ohca3Tier')}</p>
             <p class="text-sm text-slate-700">${t('ohcaMain')} <b class="text-amber-800">${t('ohca3Bold')}</b>${t('ohcaEnd')}</p>
-            <div class="text-xs space-y-0.5 pl-2 border-l-2 border-amber-300">
-              <div>${t('ohca3L1')} <b>${t('ohca3L1B')}</b></div>
-              <div>${t('ohca3L2')} <b>${t('ohca3L2B')}</b></div>
-            </div>${cite}`;
+            ${cite}`;
   }
   return `<p class="font-medium text-amber-700">${t('ohca12Tier')}</p>
           <p class="text-sm text-slate-700">${t('ohca12Main')} <b class="text-amber-700">${t('ohca12Bold')}</b>${t('ohca12After')}</p>
