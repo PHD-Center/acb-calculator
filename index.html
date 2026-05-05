@@ -142,8 +142,8 @@
       </div>
     </div>
 
-    <!-- Two-up: Cardiovascular & Pneumonia -->
-    <div class="grid md:grid-cols-2 gap-4 mb-6">
+    <!-- Three-up: Cardiovascular, Pneumonia & OHCA -->
+    <div class="grid md:grid-cols-3 gap-4 mb-6">
       <div class="bg-white rounded-2xl shadow-sm border-2 border-red-200 p-4 sm:p-6">
         <h2 class="text-base font-semibold text-red-900 mb-3 flex items-center gap-2">
           <span>❤️</span> <span id="cvCardTitle">心血管事件風險</span>
@@ -155,6 +155,12 @@
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="#0284c7" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><path d="M12 2c-.55 0-1 .45-1 1v3.7c-.85-.43-1.8-.7-2.8-.7C5 6 2.5 8.5 2.5 11.5v5.7C2.5 19.3 4.2 21 6.3 21c2.4 0 4.2-1.9 4.2-4.2v-3.6c0-.7.4-1.2 1-1.4v-1.6c-.6.2-1 .7-1 1.4v3.6c0 1.8-1.4 3.2-3.2 3.2-1.5 0-2.8-1.2-2.8-2.8v-5.7C4.5 9 6.5 7 8.7 7c1.5 0 2.7.8 3.3 2v8c0 .55.45 1 1 1s1-.45 1-1V9c.6-1.2 1.8-2 3.3-2 2.2 0 4.2 2 4.2 4.2v5.7c0 1.5-1.2 2.8-2.8 2.8-1.8 0-3.2-1.4-3.2-3.2v-3.6c0-.7-.4-1.2-1-1.4v1.6c.6.2 1 .7 1 1.4v3.6c0 2.4 1.9 4.2 4.2 4.2 2.1 0 3.8-1.7 3.8-3.8v-5.7C21.5 8.5 19 6 16 6c-1 0-1.95.27-2.8.7V3c0-.55-.45-1-1-1z"/></svg> <span id="pnCardTitle">肺炎風險</span>
         </h2>
         <div id="pnContent" class="text-sm text-slate-700 space-y-2"></div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border-2 border-amber-200 p-4 sm:p-6">
+        <h2 class="text-base font-semibold text-amber-900 mb-3 flex items-center gap-2">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><path d="M12 21s-7-4.5-7-10.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 7 4.5C19 16.5 12 21 12 21z" fill="#b45309"/><path d="M13 8.2L9.5 13.5h2.3L10.8 18l3.7-5.7h-2.3l.8-4.1z" fill="#fff"/></svg> <span id="ohcaCardTitle">院外心跳停止 (OHCA)</span>
+        </h2>
+        <div id="ohcaContent" class="text-sm text-slate-700 space-y-2"></div>
       </div>
     </div>
 
@@ -219,6 +225,17 @@
           <p id="evPnNoteEl" class="mt-1 text-slate-500">效應為相乘:N 分 ACB 風險約為未服用者的 1.25 的 N 次方倍 (例:3 分 ≈ 2 倍、5 分 ≈ 3 倍)。</p>
           <p class="text-xs text-slate-400 mt-1">Yang ASH et al. <i>Clin Epidemiol.</i> 2025 Sep 30;17:787–796</p>
         </div>
+        <div>
+          <p id="evOhcaTitleEl" class="font-medium text-slate-800">院外心跳停止 OHCA (Eur Heart J 2025)</p>
+          <p id="evOhcaDescEl" class="mt-1">≥65 歲族群,近期 30 天內 ACB 升高與 OHCA 風險升高相關 (case-crossover 主分析):</p>
+          <ul class="list-disc list-inside mt-1 space-y-0.5 ml-2">
+            <li id="evOhcaL1El">ACB 1–2 分:OHCA 風險 <b>增加約 56%</b>(相比 0 分)</li>
+            <li id="evOhcaL2El">ACB ≥3 分:風險約為 <b>2.2 倍</b>(相比 0 分)</li>
+            <li id="evOhcaL3El">ACB ≥5 分:風險約為 <b>2.7 倍</b>(相比 0 分)</li>
+            <li id="evOhcaL4El">ACB ≥10 分:風險約為 <b>3 倍</b>(相比 0 分)</li>
+          </ul>
+          <p class="text-xs text-slate-400 mt-1">Tsai MJ et al. <i>Eur Heart J</i> 2025;46(47):5143–5156</p>
+        </div>
       </div>
     </details>
 
@@ -247,8 +264,9 @@
   </section>
 
   <footer class="mt-8 text-center text-xs text-slate-400">
+    <p id="footerDisclaimer" class="text-slate-500 italic mb-2">Note: 本工具僅供醫療人員參考。</p>
     <p id="footerScales">Scales: ACB · ADS · GABS · mACB · KABS · ARS &nbsp;|&nbsp; 122 drugs from PHDc</p>
-    <p id="footerRef" class="mt-1">Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796</p>
+    <p id="footerRef" class="mt-1">Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156</p>
   </footer>
 
 </div>
@@ -260,6 +278,7 @@ const I18N = {
   zh: {
     title: "抗膽鹼藥物負擔計算器",
     subtitle: "Anticholinergic Burden Calculator · 6 種評分量表整合分析",
+    disclaimer: "Note: 本工具僅供醫療人員參考。",
     inputLabel: "輸入病人藥物",
     placeholder: "輸入藥名 (e.g. Quetiapine)",
     addBtn: "加入",
@@ -343,15 +362,49 @@ const I18N = {
     evPnL1: 'ACB / ADS / GABS:約 <b>+25%</b>',
     evPnL2: 'm-ACB:約 <b>+22%</b> · KABS:約 <b>+23%</b>',
     evPnNote: "效應為相乘:N 分 ACB 風險約為未服用者的 1.25 的 N 次方倍 (例:3 分 ≈ 2 倍、5 分 ≈ 3 倍)。",
+    evOhcaTitle: "院外心跳停止 OHCA (Eur Heart J 2025)",
+    evOhcaDesc: "≥65 歲族群,近期 30 天內 ACB 升高與 OHCA 風險升高相關 (case-crossover 主分析):",
+    evOhcaL1: 'ACB 1–2 分:OHCA 風險 <b>增加約 56%</b>(相比 0 分)',
+    evOhcaL2: 'ACB ≥3 分:風險約為 <b>2.2 倍</b>(相比 0 分)',
+    evOhcaL3: 'ACB ≥5 分:風險約為 <b>2.7 倍</b>(相比 0 分)',
+    evOhcaL4: 'ACB ≥10 分:風險約為 <b>3 倍</b>(相比 0 分)',
+    ohcaTitle: "院外心跳停止 (OHCA)",
+    ohca0Main: "目前無抗膽鹼藥物負擔,屬最低風險族群。",
+    ohca0Sub: "維持低負擔可避免 OHCA 風險上升。",
+    ohca12Tier: "中度抗膽鹼負擔 (ACB 1–2)",
+    ohca12Main: "30 天內 OHCA 風險約",
+    ohca12Bold: "增加 56%",
+    ohca12After: "(相比未服用)。",
+    ohca12Hint: "若臨床許可,建議降至 0 分。",
+    ohca3Tier: "高度抗膽鹼負擔 (ACB ≥3)",
+    ohcaMain: "30 天內 OHCA 風險,約為未服用者的",
+    ohca3Bold: "2.2 倍",
+    ohcaEnd: "。",
+    ohca3L1: "·",
+    ohca3L1B: "風險逐步隨 ACB 分數上升而升高",
+    ohca3L2: "·",
+    ohca3L2B: "≥65 歲老年層 case-crossover 主分析",
+    ohca5Tier: "非常高度抗膽鹼負擔 (ACB ≥5)",
+    ohca5Bold: "2.7 倍",
+    ohca5L1: "· ACB ≥5 vs 0:風險",
+    ohca5L1B: "×2.7(增加約 170%)",
+    ohca5L2: "· ACB ≥3 vs 0:風險 ×2.2",
+    ohca10Tier: "極高度抗膽鹼負擔 (ACB ≥10)",
+    ohca10Bold: "3 倍",
+    ohca10L1: "· ACB ≥10 vs 0:風險",
+    ohca10L1B: "×3.0(增加約 200%)",
+    ohca10L2: "· ACB ≥5 vs 0:風險 ×2.7",
+    ohca10L3: "· ACB ≥3 vs 0:風險 ×2.2",
     drugDbHint: "藥物資料來源:PHDc · 共 122 種藥物",
     footerScales: 'Scales: ACB · ADS · GABS · mACB · KABS · ARS &nbsp;|&nbsp; 122 drugs from PHDc',
-    footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796',
+    footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
     inAppWarn: '⚠ 偵測到 in-app 瀏覽器(LINE/FB/IG 等),功能可能受限<br>請點右上角「⋯」選單 → <b>「以瀏覽器/Safari 開啟」</b>',
     noscript: '⚠ 此頁面需要啟用 JavaScript<br>請複製連結後以 <b>Safari</b> (iPhone) 或 <b>Chrome</b> (Android) 開啟',
   },
   en: {
     title: "Anticholinergic Burden Calculator",
     subtitle: "Anticholinergic Burden Calculator · Integrated 6-scale analysis",
+    disclaimer: "Note: For healthcare professional reference only.",
     inputLabel: "Enter patient medications",
     placeholder: "Drug name (e.g. Quetiapine)",
     addBtn: "Add",
@@ -435,9 +488,42 @@ const I18N = {
     evPnL1: 'ACB / ADS / GABS: approximately <b>+25%</b>',
     evPnL2: 'm-ACB: approximately <b>+22%</b> · KABS: approximately <b>+23%</b>',
     evPnNote: "Multiplicative effect: ACB N points ≈ 1.25^N times non-user risk (e.g. 3 points ≈ ×2, 5 points ≈ ×3).",
+    evOhcaTitle: "Out-of-hospital cardiac arrest (Eur Heart J 2025)",
+    evOhcaDesc: "In adults ≥65 years, recently raised ACB within 30 days was associated with increased OHCA risk (primary case-crossover analysis):",
+    evOhcaL1: 'ACB 1–2: OHCA risk <b>≈56% higher</b> (vs 0)',
+    evOhcaL2: 'ACB ≥3: risk approximately <b>2.2×</b> (vs 0)',
+    evOhcaL3: 'ACB ≥5: risk approximately <b>2.7×</b> (vs 0)',
+    evOhcaL4: 'ACB ≥10: risk approximately <b>3×</b> (vs 0)',
+    ohcaTitle: "Out-of-hospital cardiac arrest (OHCA)",
+    ohca0Main: "No anticholinergic burden — lowest risk group.",
+    ohca0Sub: "Maintaining a low burden helps prevent rises in OHCA risk.",
+    ohca12Tier: "Moderate anticholinergic burden (ACB 1–2)",
+    ohca12Main: "30-day OHCA risk approximately",
+    ohca12Bold: "56% higher",
+    ohca12After: " than non-users.",
+    ohca12Hint: "Reduce to 0 if clinically feasible.",
+    ohca3Tier: "High anticholinergic burden (ACB ≥3)",
+    ohcaMain: "30-day OHCA risk approximately",
+    ohca3Bold: "2.2× that of non-users",
+    ohcaEnd: ".",
+    ohca3L1: "·",
+    ohca3L1B: "Risk rises progressively with ACB score",
+    ohca3L2: "·",
+    ohca3L2B: "Older subgroup ≥65y, primary case-crossover analysis",
+    ohca5Tier: "Very high anticholinergic burden (ACB ≥5)",
+    ohca5Bold: "2.7× that of non-users",
+    ohca5L1: "· ACB ≥5 vs 0:",
+    ohca5L1B: "×2.7 risk (≈170% higher)",
+    ohca5L2: "· ACB ≥3 vs 0: ×2.2 risk",
+    ohca10Tier: "Extreme anticholinergic burden (ACB ≥10)",
+    ohca10Bold: "3× that of non-users",
+    ohca10L1: "· ACB ≥10 vs 0:",
+    ohca10L1B: "×3.0 risk (≈200% higher)",
+    ohca10L2: "· ACB ≥5 vs 0: ×2.7 risk",
+    ohca10L3: "· ACB ≥3 vs 0: ×2.2 risk",
     drugDbHint: "Drug data source: PHDc · 122 medications",
     footerScales: 'Scales: ACB · ADS · GABS · mACB · KABS · ARS &nbsp;|&nbsp; 122 drugs from PHDc',
-    footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796',
+    footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
     inAppWarn: '⚠ In-app browser detected (LINE / FB / IG, etc.) — features may be limited.<br>Please open via the share menu → <b>"Open in browser/Safari"</b>.',
     noscript: '⚠ This page requires JavaScript.<br>Please open in <b>Safari</b> (iPhone) or <b>Chrome</b> (Android).',
   },
@@ -481,10 +567,13 @@ function applyStaticLang() {
     evCvL1El: 'evCvL1', evCvL2El: 'evCvL2', evCvL3El: 'evCvL3', evCvL4El: 'evCvL4', evCvL5El: 'evCvL5',
     evPnTitleEl: 'evPnTitle', evPnDescEl: 'evPnDesc',
     evPnL1El: 'evPnL1', evPnL2El: 'evPnL2', evPnNoteEl: 'evPnNote',
-    cvCardTitle: 'cvTitle', pnCardTitle: 'pnTitle',
+    evOhcaTitleEl: 'evOhcaTitle', evOhcaDescEl: 'evOhcaDesc',
+    evOhcaL1El: 'evOhcaL1', evOhcaL2El: 'evOhcaL2', evOhcaL3El: 'evOhcaL3', evOhcaL4El: 'evOhcaL4',
+    cvCardTitle: 'cvTitle', pnCardTitle: 'pnTitle', ohcaCardTitle: 'ohcaTitle',
     asianCardTitle: 'asianTitle', sameClassCardTitle: 'sameClassTitle',
     drugAltsCardTitle: 'altsTitle',
     monitorCardTitle: 'monitorTitle', monitorCardMsg: 'monitorMsg',
+    footerDisclaimer: 'disclaimer',
     footerScales: 'footerScales', footerRef: 'footerRef',
   };
   Object.keys(map).forEach(id => {
@@ -797,6 +886,42 @@ function pnText(drugList) {
           <p class="text-xs text-slate-400 pt-1">Yang ASH et al. <i>Clin Epidemiol.</i> 2025 Sep 30;17:787–796</p>`;
 }
 
+function ohcaText(acb) {
+  const cite = `<p class="text-xs text-slate-400 pt-1">Tsai MJ et al. <i>Eur Heart J</i> 2025;46(47):5143–5156</p>`;
+  if (acb === 0) {
+    return `<p class="text-emerald-700 font-medium">${t('ohca0Main')}</p>
+            <p class="text-xs text-slate-500">${t('ohca0Sub')}</p>`;
+  }
+  if (acb >= 10) {
+    return `<p class="font-medium text-amber-900">${t('ohca10Tier')}</p>
+            <p class="text-sm text-slate-700">${t('ohcaMain')} <b class="text-amber-800">${t('ohca10Bold')}</b>${t('ohcaEnd')}</p>
+            <div class="text-xs space-y-0.5 pl-2 border-l-2 border-amber-300">
+              <div>${t('ohca10L1')} <b>${t('ohca10L1B')}</b></div>
+              <div>${t('ohca10L2')}</div>
+              <div>${t('ohca10L3')}</div>
+            </div>${cite}`;
+  }
+  if (acb >= 5) {
+    return `<p class="font-medium text-amber-900">${t('ohca5Tier')}</p>
+            <p class="text-sm text-slate-700">${t('ohcaMain')} <b class="text-amber-800">${t('ohca5Bold')}</b>${t('ohcaEnd')}</p>
+            <div class="text-xs space-y-0.5 pl-2 border-l-2 border-amber-300">
+              <div>${t('ohca5L1')} <b>${t('ohca5L1B')}</b></div>
+              <div>${t('ohca5L2')}</div>
+            </div>${cite}`;
+  }
+  if (acb >= 3) {
+    return `<p class="font-medium text-amber-900">${t('ohca3Tier')}</p>
+            <p class="text-sm text-slate-700">${t('ohcaMain')} <b class="text-amber-800">${t('ohca3Bold')}</b>${t('ohcaEnd')}</p>
+            <div class="text-xs space-y-0.5 pl-2 border-l-2 border-amber-300">
+              <div>${t('ohca3L1')} <b>${t('ohca3L1B')}</b></div>
+              <div>${t('ohca3L2')} <b>${t('ohca3L2B')}</b></div>
+            </div>${cite}`;
+  }
+  return `<p class="font-medium text-amber-700">${t('ohca12Tier')}</p>
+          <p class="text-sm text-slate-700">${t('ohca12Main')} <b class="text-amber-700">${t('ohca12Bold')}</b>${t('ohca12After')}</p>
+          <p class="text-xs text-slate-600">${t('ohca12Hint')}</p>${cite}`;
+}
+
 function findSameClass(drugList) {
   const groups = {};
   drugList.forEach(d => {
@@ -850,6 +975,7 @@ function render() {
 
   $("cvContent").innerHTML = cvText(tot.ACB);
   $("pnContent").innerHTML = pnText(selected);
+  $("ohcaContent").innerHTML = ohcaText(tot.ACB);
 
   const THRESHOLD = 2;
   const flagged = [];

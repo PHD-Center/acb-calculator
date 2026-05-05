@@ -1,6 +1,8 @@
 # 抗膽鹼藥物負擔計算器 (ACB Calculator)
 
-整合 6 種國際抗膽鹼負擔評分量表的線上計算工具,根據近期發表於 *BMJ* 與 *Clinical Epidemiology* 的兩項台灣健保資料庫研究,提供針對 ≥65 歲族群的 **急性心血管事件** 與 **住院型肺炎** 風險量化評估與臨床建議。
+> **Note:本工具僅供醫療人員參考。**
+
+整合 6 種國際抗膽鹼負擔評分量表的線上計算工具,根據近期發表於 *BMJ*、*Clinical Epidemiology* 與 *European Heart Journal* 的三項台灣健保資料庫研究,提供針對 ≥65 歲族群的 **急性心血管事件**、**住院型肺炎** 與 **院外心跳停止 (OHCA)** 風險量化評估與臨床建議。
 
 ## 線上使用
 
@@ -23,6 +25,11 @@
   - ACB ≤5:每加 1 分 → 風險 ×1.25(原始研究主分析)
   - ACB ≥6:每加 1 分 → 風險 ×1.03(外推估計,梯度參考 BMJ 2023 心血管事件 ≥5 vs ≥10 之相對風險比)
   - 介面以累乘呈現逐藥增量,並於外推區間自動標註說明
+- **OHCA 風險分級**(依 Eur Heart J 2025;**30 天內**院外心跳停止風險;≥65 歲老年層 case-crossover 主分析):
+  - ACB 1–2 → ×1.6 倍
+  - ACB ≥3 → ×2.2 倍
+  - ACB ≥5 → ×2.7 倍
+  - ACB ≥10 → ×3 倍
 - **同類藥物重複用藥提醒**(依 ATC level 4 偵測)
 - **亞洲族群量表 (m-ACB / KABS) 偏高警示**:當亞洲量表分數明顯高於 ACB 時提示可能低估
 - **逐藥替代建議**:對 ACB=3 高負擔藥物,個別列出同類較低負擔可考慮藥物;若無同類替代則明確告知
@@ -33,6 +40,8 @@
 > Huang W-C, Yang A S-H, Tsai D H-T, Shao S-C, Lin S-J, Lai E C-C. **Association between recently raised anticholinergic burden and risk of acute cardiovascular events: nationwide case-case-time-control study.** *BMJ* 2023;382:e076045. doi:10.1136/bmj-2023-076045
 
 > Yang A S-H, Fan Chiang H-Y, Tsai D H-T, Chuang A T-M, Lai E C-C. **Association Between Pneumonia Risk and Anticholinergic Burden Among Patients with Different Frailty Levels.** *Clin Epidemiol.* 2025 Sep 30;17:787–796.
+
+> Tsai M-J, Su C T-T, Sung S-F, Yang H-Y, Cheng M C-Y, Chuang A T-M, Shao S-C, Lai E C-C. **Transient anticholinergic burden and out-of-hospital cardiac arrest: a case-crossover study.** *Eur Heart J.* 2025;46(47):5143–5156. doi:10.1093/eurheartj/ehaf723
 
 ### 評分量表原始文獻
 
@@ -56,7 +65,7 @@
 
 ## 授權
 
-本專案以教育與研究用途公開。引用資料時請註明上述兩篇原始文獻。
+本專案以教育與研究用途公開。引用資料時請註明上述三篇原始文獻。
 
 ---
 
