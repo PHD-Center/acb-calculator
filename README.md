@@ -15,6 +15,12 @@
 - **6 種評分量表整合**:ACB · ADS · GABS · m-ACB · KABS · ARS(介面內附各量表發表年代、作者、適用族群與原始文獻引用)
 - **122 種台灣常見藥物資料庫**(來源:PHDc)
 - **中英文商品名搜尋**:整合健保藥品資料庫 (NHI_ATCcode) 共 5,400 餘筆品牌名稱(英文 ≈2,300、中文 ≈3,150)
+- **拍照/上傳藥歷影像辨識**:整合 Tesseract.js OCR 直接辨識並自動加入,無需手動勾選。 4032×3024 phone 照片實測 **約 4–5 秒** 完成全流程
+  - **管線**:預設**兩顆 eng-only Tesseract worker 並行**(PSM 3 自動版型 + PSM 11 sparse text),寬高縮至 1500 px、灰階 + 對比 / 銳化 兩種前處理同時投入。 worker 在按下相機鈕的瞬間就開始 prewarm — 等使用者選完檔案 worker 多半已就緒
+  - **中文 fallback**:eng-only pass 完全沒抓到藥物時才動態載入 chi_tra worker (約 +3 s),處理罕見「整張處方只標中文藥品名」case
+  - **模糊比對策略**:精確比對 (100) → 子字串包含 (88) → Levenshtein 距離 (1 字差→92) → 起始錨定滑動視窗模糊比對 (處理 OCR 誤字 + 劑量黏連)
+  - **誤判防護**:驅動分數的 source token 必須對該藥物為最高分 (避免 "Trazo"→Triamcinolone 透過共現 source 誤通過)、滑動視窗只允許起始錨定 (避免 "metoclopramide" 誤觸 loperamide)、子字串完全包含時抑制較短藥名 (avoid Methylprednisolone 誤觸 Prednisolone)、品牌名須達 100 分才自動加入
+  - **建議影像**:直接螢幕截圖效果最佳;手機翻拍螢幕(反光、moiré)可能無法辨識,建議改用螢幕截圖或裁切後的清晰照片
 - **計算範圍說明**:外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關),依 BMJ 2023 原始研究方法
 - **心血管事件風險分級**(依 BMJ 2023 主分析與 sensitivity analysis;**30 天內**急性心血管事件風險):
   - ACB 1–2 → ×1.4 倍

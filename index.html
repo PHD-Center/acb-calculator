@@ -86,8 +86,38 @@
       <div id="suggestions" class="hidden mt-2 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto"></div>
     </form>
     <p id="inputHintEl" class="text-xs text-slate-400 mt-2">輸入藥名 → 點「加入」按鈕 (或從建議中選)</p>
+    <div class="mt-3 flex items-center gap-2">
+      <button type="button" id="ocrBtn" onclick="_prewarmOCR();document.getElementById('ocrFile').click();"
+              class="inline-flex items-center gap-1.5 px-3 py-2 border border-emerald-300 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-medium hover:bg-emerald-100 transition">
+        <span>📷</span> <span id="ocrBtnLabel">拍照/上傳藥歷辨識</span>
+      </button>
+      <span id="ocrHintEl" class="text-xs text-slate-400">支援中英文藥歷影像(直接螢幕截圖效果最佳)</span>
+      <input type="file" id="ocrFile" accept="image/*" capture="environment" style="display:none;" onchange="runOCR(this.files[0])">
+    </div>
     <p id="methodNoteEl" class="text-xs text-slate-500 mt-2 italic">外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關)。</p>
   </section>
+
+  <!-- OCR Modal -->
+  <div id="ocrModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3" style="background:rgba(15,23,42,0.5);">
+    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 shadow-xl">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-slate-900 flex items-center gap-2">
+          <span>📷</span> <span id="ocrModalTitleEl">辨識結果</span>
+        </h3>
+        <button type="button" onclick="closeOCR()" class="text-slate-400 hover:text-red-600 text-xl leading-none px-2">✕</button>
+      </div>
+      <div id="ocrLoading" class="text-center py-8">
+        <div class="inline-block w-8 h-8 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-3"></div>
+        <div class="text-slate-600 text-sm" id="ocrProgress">準備中…</div>
+        <div class="text-xs text-slate-400 mt-2" id="ocrLoadingHintEl">第一次使用需下載辨識引擎(約 10 MB),稍候片刻</div>
+      </div>
+      <div id="ocrResults" class="space-y-2 hidden"></div>
+      <div id="ocrFooter" class="mt-4 flex gap-2 hidden">
+        <button type="button" onclick="closeOCR()" class="flex-1 px-4 py-2 border border-slate-300 rounded-xl text-sm" id="ocrCancelEl">取消</button>
+        <button type="button" id="ocrConfirmBtn" onclick="confirmOCR()" class="flex-1 px-4 py-2 rounded-xl text-sm font-medium" style="background:#4f46e5;color:#fff;"><span id="ocrConfirmEl">加入勾選藥物</span></button>
+      </div>
+    </div>
+  </div>
 
   <!-- Selected drugs -->
   <section id="selectedSection" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6 hidden">
@@ -285,6 +315,12 @@ const I18N = {
     placeholder: "輸入藥名 (e.g. Quetiapine)",
     addBtn: "加入",
     inputHint: "輸入藥名 → 點「加入」按鈕 (或從建議中選)",
+    ocrBtn: "拍照/上傳藥歷辨識",
+    ocrHint: "支援中英文藥歷影像(直接螢幕截圖效果最佳)",
+    ocrModalTitle: "辨識結果",
+    ocrLoadingHint: "第一次使用需下載辨識引擎(約 10 MB),稍候片刻",
+    ocrCancel: "取消",
+    ocrConfirm: "加入勾選藥物",
     methodNote: "外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關)。",
     scalesIntroTitle: "6 種抗膽鹼負擔量表簡介",
     scaleAcb: "2008 年由 Boustani 等學者於美國發表,以 0–3 分評估藥物對認知功能之抗膽鹼影響,為目前國際間最廣為使用之量表,亦為 BMJ 2023 與 Clin Epidemiol 2025 主分析所採用。<span class='block text-xs text-slate-400 mt-1'>Boustani M, Campbell N, Munger S, Maidment I, Fox C. <i>Aging Health</i>. 2008;4(3):311–320.</span>",
@@ -412,6 +448,12 @@ const I18N = {
     placeholder: "Drug name (e.g. Quetiapine)",
     addBtn: "Add",
     inputHint: "Type drug name → tap \"Add\" (or pick a suggestion)",
+    ocrBtn: "Scan / upload medication list",
+    ocrHint: "OCR for English/Chinese medication images (clear screenshots work best)",
+    ocrModalTitle: "OCR results",
+    ocrLoadingHint: "First use downloads the OCR engine (~10 MB). Please wait.",
+    ocrCancel: "Cancel",
+    ocrConfirm: "Add selected drugs",
     methodNote: "Topical preparations are excluded; inhaled medications are included (systemic absorption is documented and has been linked with cardiovascular events).",
     scalesIntroTitle: "Overview of the 6 anticholinergic burden scales",
     scaleAcb: "Boustani et al. (USA, 2008). A 0–3 rating of anticholinergic impact on cognition; the most widely used scale internationally and the primary scale used in BMJ 2023 and Clin Epidemiol 2025.<span class='block text-xs text-slate-400 mt-1'>Boustani M, Campbell N, Munger S, Maidment I, Fox C. <i>Aging Health</i>. 2008;4(3):311–320.</span>",
@@ -558,6 +600,9 @@ function applyStaticLang() {
     hdrTitle: 'title', hdrSub: 'subtitle', hdrPopulation: 'population',
     inputLabelEl: 'inputLabel', drugInput: { attr: 'placeholder', key: 'placeholder' },
     addBtnEl: 'addBtn', inputHintEl: 'inputHint',
+    ocrBtnLabel: 'ocrBtn', ocrHintEl: 'ocrHint',
+    ocrModalTitleEl: 'ocrModalTitle', ocrLoadingHintEl: 'ocrLoadingHint',
+    ocrCancelEl: 'ocrCancel', ocrConfirmEl: 'ocrConfirm',
     methodNoteEl: 'methodNote',
     scalesIntroTitleEl: 'scalesIntroTitle', scalesIntroExpandEl: 'evExpand',
     scaleAcbEl: 'scaleAcb', scaleAdsEl: 'scaleAds', scaleGabsEl: 'scaleGabs',
@@ -1045,6 +1090,681 @@ function addFirstMatch() {
 }
 window.addFirstMatch = addFirstMatch;
 window.runSearch = runSearch;
+
+// ===== OCR (photo / image upload → drug recognition) =====
+let _ocrWorker = null;       // PSM 3 (auto layout) — primary pass, ENG only (fast)
+let _ocrWorker2 = null;      // PSM 11 (sparse text) — secondary pass, ENG only (fast)
+let _ocrChineseWorker = null;// chi_tra fallback — lazy-loaded only when Eng pass yields 0 drugs
+let _ocrInitPromise = null;
+let _ocrChineseInitPromise = null;
+let _ocrCandidates = [];
+
+function _ocrLogger(m) {
+  const el = document.getElementById('ocrProgress');
+  if (!el) return;
+  if (m.status === 'recognizing text') {
+    el.textContent = (LANG === 'zh' ? '辨識中… ' : 'Recognising… ') + Math.round(m.progress * 100) + '%';
+  } else if (m.status === 'loading language traineddata' || m.status === 'initializing api') {
+    el.textContent = (LANG === 'zh' ? '初始化引擎… ' : 'Initialising… ') + (m.progress ? Math.round(m.progress * 100) + '%' : '');
+  }
+}
+
+// Lazy-init two ENG-ONLY Tesseract workers in parallel. Eng-only is ~3× faster
+// than eng+chi_tra and catches all English drug names (the common Taiwan-NHI
+// prescription format). Chinese fallback is loaded later only if needed.
+function _prewarmOCR() {
+  if (_ocrInitPromise) return _ocrInitPromise;
+  _ocrInitPromise = (async () => {
+    if (!window.Tesseract) {
+      await _loadScript('https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js');
+    }
+    const [w1, w2] = await Promise.all([
+      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger }),
+      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger })
+    ]);
+    try { await w2.setParameters({ tessedit_pageseg_mode: '11' }); } catch(e) {}
+    _ocrWorker = w1;
+    _ocrWorker2 = w2;
+  })();
+  _ocrInitPromise.catch(() => { _ocrInitPromise = null; });
+  return _ocrInitPromise;
+}
+window._prewarmOCR = _prewarmOCR;
+
+// Lazy-load chi_tra worker — only invoked when English pass returns 0 drugs.
+// Adds ~3 s on Chinese-only images, free on English images.
+function _initChineseOCR() {
+  if (_ocrChineseInitPromise) return _ocrChineseInitPromise;
+  _ocrChineseInitPromise = (async () => {
+    _ocrChineseWorker = await Tesseract.createWorker(['eng', 'chi_tra'], 1, { logger: _ocrLogger });
+  })();
+  _ocrChineseInitPromise.catch(() => { _ocrChineseInitPromise = null; });
+  return _ocrChineseInitPromise;
+}
+
+function _loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function _lev(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i-1] === b[j-1] ? 0 : 1;
+      curr[j] = Math.min(prev[j]+1, curr[j-1]+1, prev[j-1]+cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return curr[b.length];
+}
+
+function _scoreEN(tok, name) {
+  const t = String(tok).toLowerCase().replace(/[^a-z]/g, '');
+  const n = String(name).toLowerCase().replace(/[^a-z]/g, '');
+  if (!t || !n || t.length < 3 || n.length < 3) return 0;
+  let best = 0;
+  if (t === n) return 100;
+  if (n.length >= 4 && t.includes(n)) best = Math.max(best, 88);
+  if (t.length >= 4 && n.includes(t)) best = Math.max(best, 80 - Math.max(0, n.length - t.length) * 2);
+  // Strict Levenshtein when lengths are similar
+  if (Math.abs(t.length - n.length) <= 3) {
+    const d = _lev(t, n);
+    const ml = Math.max(t.length, n.length);
+    if (d === 0) return 100;
+    if (d === 1 && ml >= 5) best = Math.max(best, 92);
+    else if (d === 2 && ml >= 12) best = Math.max(best, 78); // long-word tolerance, but below auto-add to avoid noisy-image false positives
+    else if (d === 2 && ml >= 6) best = Math.max(best, 70);
+    else if (d === 3 && ml >= 8) best = Math.max(best, 50);
+  }
+  // Sliding-window fuzzy substring (handles OCR typo + dosing/freq concatenation).
+  // Only check START-ANCHORED position — drug names appear at token start with
+  // dose/freq concatenated after. End-anchored matches catch suffix collisions
+  // like "lopramide" suffix of "metoclopramide" giving false Loperamide hits.
+  if (n.length >= 5 && t.length >= n.length) {
+    let win = Infinity;
+    for (const w of [n.length - 1, n.length, n.length + 1]) {
+      if (w < 4 || w > t.length) continue;
+      const d = _lev(t.slice(0, w), n);
+      if (d < win) win = d;
+      if (win === 0) break;
+    }
+    if (win === 0) best = Math.max(best, 90);
+    else if (win === 1 && n.length >= 7) best = Math.max(best, 87);
+    else if (win === 2 && n.length >= 12) best = Math.max(best, 75);
+    else if (win === 2 && n.length >= 10) best = Math.max(best, 60);
+  }
+  // Common-prefix soft match
+  let p = 0;
+  while (p < Math.min(t.length, n.length) && t[p] === n[p]) p++;
+  if (p >= 5 && p / n.length >= 0.6) best = Math.max(best, 50 + Math.round(p / n.length * 20));
+  return best;
+}
+
+function _scoreZH(tok, name) {
+  if (!tok || !name) return 0;
+  const t = String(tok).replace(/[^一-鿿]/g, '');
+  const n = String(name).replace(/[^一-鿿]/g, '');
+  if (!t || !n || t.length < 2 || n.length < 2) return 0;
+  if (t === n) return 100;
+  if (n.length >= 2 && t.includes(n)) return 88;
+  if (t.length >= 2 && n.includes(t)) return 78;
+  // Char-level overlap
+  const tset = new Set(t);
+  let common = 0;
+  for (const c of n) if (tset.has(c)) common++;
+  const ratio = common / n.length;
+  if (ratio >= 0.7 && n.length >= 3) return 55 + Math.round(ratio * 25);
+  if (ratio >= 0.5 && n.length >= 4) return 45 + Math.round(ratio * 20);
+  return 0;
+}
+
+function _addCand(map, drug, score, source, kind) {
+  const key = drug.atc + '|' + drug.name;
+  const cur = map.get(key);
+  if (!cur) {
+    map.set(key, { drug, score, source, kind, sources: new Set([source]) });
+  } else {
+    cur.sources.add(source);
+    if (cur.score < score) { cur.score = score; cur.source = source; cur.kind = kind; }
+  }
+}
+
+function _stripDoseFreq(tok) {
+  // Strip common medication-list noise: dose, units, route, frequency
+  return tok
+    .replace(/\b\d+(?:\.\d+)?\s*(?:mg|mcg|μg|ug|cap|caps|tab|tabs|ml|cc|iu|kg|gm|g|%)s?\b/gi, ' ')
+    .replace(/\b(?:po|iv|im|sc|sl|pr|pv|od|bid|tid|qid|qd|qod|qhs|qm|qw|qam|qpm|prn|stat|hs|ac|pc|q\d+h|q\d+d|qd?ac|qd?pc|x\d+)\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
+    .replace(/[\/_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _fuzzyMatchOCR(text) {
+  const rawTokens = text.split(/[\n\r,;|·•・\(\)\[\]【】「」『』〝〞"'：:、,。\.!?]/g)
+                       .map(s => s.trim()).filter(s => s.length >= 2);
+  const cleaned = rawTokens.map(_stripDoseFreq).filter(s => s.length >= 2);
+  // Bigrams from cleaned (drug names sometimes split across columns)
+  const expanded = [...rawTokens, ...cleaned];
+  for (let i = 0; i < cleaned.length - 1; i++) expanded.push(cleaned[i] + ' ' + cleaned[i+1]);
+  // Dedupe
+  const seen = new Set();
+  const final = [];
+  for (const t of expanded) { if (!seen.has(t) && t.length >= 2) { seen.add(t); final.push(t); } }
+
+  const map = new Map();
+  // Per-source winner: for each source token, who is the top-scoring drug?
+  const srcTop = new Map(); // source → {atc, name, score}
+  const noteTop = (tok, drug, score) => {
+    const cur = srcTop.get(tok);
+    if (!cur || cur.score < score) srcTop.set(tok, { atc: drug.atc, name: drug.name, score });
+  };
+  for (const tok of final) {
+    for (const drug of DRUGS) {
+      const sc = _scoreEN(tok, drug.name);
+      if (sc >= 50) { _addCand(map, drug, sc + 5, tok, 'generic'); noteTop(tok, drug, sc + 5); }
+    }
+    for (const atc in BRANDS) {
+      const drug = DRUGS.find(d => d.atc === atc);
+      if (!drug) continue;
+      for (const brand of BRANDS[atc].en || []) {
+        if (brand.length < 5) continue; // skip too-short brand entries (extraction noise)
+        const sc = _scoreEN(tok, brand);
+        if (sc >= 55) { _addCand(map, drug, sc, tok, 'EN: ' + brand); noteTop(tok, drug, sc); }
+      }
+      for (const brand of BRANDS[atc].zh || []) {
+        if ([...brand].length < 2) continue;
+        const sc = _scoreZH(tok, brand);
+        if (sc >= 60) { _addCand(map, drug, sc, tok, '中文: ' + brand); noteTop(tok, drug, sc); }
+      }
+    }
+  }
+  // Stash srcTop on the result so runOCR can use it
+  window._lastSrcTop = srcTop;
+  let cands = [...map.values()].sort((a, b) => b.score - a.score);
+  // Suppress a drug only when EVERY source token where it matched is also matched
+  // by a longer drug name that fully contains it (e.g. Prednisolone is suppressed
+  // only when it appeared exclusively as a substring of "Methylprednisolone …",
+  // not when there is a separate "Prednisolone …" line).
+  const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+  cands = cands.filter(c => {
+    const cn = norm(c.drug.name);
+    if (cn.length < 4) return true;
+    for (const src of c.sources) {
+      let coveredByLonger = false;
+      for (const o of cands) {
+        if (o === c || !o.sources.has(src)) continue;
+        const on = norm(o.drug.name);
+        if (on.length > cn.length && on.includes(cn)) { coveredByLonger = true; break; }
+      }
+      if (!coveredByLonger) return true; // at least one independent source → keep
+    }
+    return false; // all sources subsumed by a longer drug name
+  });
+  return cands;
+}
+
+function _autoCropTextDense(img) {
+  // Detect the region with the highest text density (horizontal edge density per row)
+  // and crop to it. Better than brightness-based for noisy phone-of-screen photos.
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const cx = c.getContext('2d');
+  cx.drawImage(img, 0, 0);
+  const data = cx.getImageData(0, 0, c.width, c.height).data;
+  const W = c.width, H = c.height;
+  const lumAt = (x, y) => {
+    const i = (y * W + x) * 4;
+    return data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+  };
+  // Compute horizontal edge density per row (text rows have many transitions)
+  const rowEdges = new Float32Array(H);
+  for (let y = 0; y < H; y++) {
+    let count = 0;
+    let prev = lumAt(0, y);
+    for (let x = 1; x < W; x++) {
+      const cur = lumAt(x, y);
+      if (Math.abs(cur - prev) > 30) count++;
+      prev = cur;
+    }
+    rowEdges[y] = count / W;
+  }
+  // Smooth with rolling window (5 rows)
+  const sm = new Float32Array(H);
+  for (let y = 0; y < H; y++) {
+    let s = 0, n = 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      const yy = y + dy;
+      if (yy >= 0 && yy < H) { s += rowEdges[yy]; n++; }
+    }
+    sm[y] = s / n;
+  }
+  // Find longest contiguous range above threshold
+  const peak = sm.reduce((m, v) => Math.max(m, v), 0);
+  const thr = Math.max(0.05, peak * 0.4);
+  let bestS = 0, bestL = 0, curS = 0, curL = 0;
+  for (let y = 0; y < H; y++) {
+    if (sm[y] > thr) {
+      if (curL === 0) curS = y;
+      curL++;
+    } else {
+      if (curL > bestL) { bestL = curL; bestS = curS; }
+      curL = 0;
+    }
+  }
+  if (curL > bestL) { bestL = curL; bestS = curS; }
+  if (bestL < H * 0.1) return img;
+  const yEnd = bestS + bestL - 1;
+  // Within the row range, find columns with high edge density
+  const colEdges = new Float32Array(W);
+  for (let x = 0; x < W; x++) {
+    let count = 0;
+    let prev = lumAt(x, bestS);
+    for (let y = bestS + 1; y <= yEnd; y++) {
+      const cur = lumAt(x, y);
+      if (Math.abs(cur - prev) > 30) count++;
+      prev = cur;
+    }
+    colEdges[x] = count / (yEnd - bestS + 1);
+  }
+  const colSm = new Float32Array(W);
+  for (let x = 0; x < W; x++) {
+    let s = 0, n = 0;
+    for (let dx = -3; dx <= 3; dx++) {
+      const xx = x + dx;
+      if (xx >= 0 && xx < W) { s += colEdges[xx]; n++; }
+    }
+    colSm[x] = s / n;
+  }
+  const colPeak = colSm.reduce((m, v) => Math.max(m, v), 0);
+  const colThr = Math.max(0.03, colPeak * 0.3);
+  let cBestS = 0, cBestL = 0, cCurS = 0, cCurL = 0;
+  for (let x = 0; x < W; x++) {
+    if (colSm[x] > colThr) {
+      if (cCurL === 0) cCurS = x;
+      cCurL++;
+    } else {
+      if (cCurL > cBestL) { cBestL = cCurL; cBestS = cCurS; }
+      cCurL = 0;
+    }
+  }
+  if (cCurL > cBestL) { cBestL = cCurL; cBestS = cCurS; }
+  if (cBestL < W * 0.15) return img;
+  // Add small margin
+  const pad = 8;
+  const sx = Math.max(0, cBestS - pad);
+  const sy = Math.max(0, bestS - pad);
+  const sw = Math.min(W - sx, cBestL + pad * 2);
+  const sh = Math.min(H - sy, bestL + pad * 2);
+  if (sw >= W * 0.95 && sh >= H * 0.95) return img; // no meaningful crop
+  const out = document.createElement('canvas');
+  out.width = sw; out.height = sh;
+  out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
+  return out;
+}
+
+function _autoCropBright(img) {
+  // Detect the largest bright rectangular region (typical drug-list panel
+  // photographed against a darker desktop background) and return a cropped image.
+  // If detection is unreliable, return the original image.
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const cx = c.getContext('2d');
+  cx.drawImage(img, 0, 0);
+  const data = cx.getImageData(0, 0, c.width, c.height).data;
+  const W = c.width, H = c.height;
+  // Build per-row "bright fraction" (pixels with luminance > 170)
+  const rowBright = new Float32Array(H);
+  const colBright = new Float32Array(W);
+  for (let y = 0; y < H; y++) {
+    let cnt = 0;
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const lum = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+      if (lum > 170) cnt++;
+    }
+    rowBright[y] = cnt / W;
+  }
+  // Find the longest contiguous range of rows with brightness > 0.45
+  const findRange = (arr, thr) => {
+    let bestS = 0, bestE = 0, bestL = 0;
+    let curS = 0, curL = 0;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] > thr) {
+        if (curL === 0) curS = i;
+        curL++;
+      } else {
+        if (curL > bestL) { bestL = curL; bestS = curS; bestE = i - 1; }
+        curL = 0;
+      }
+    }
+    if (curL > bestL) { bestL = curL; bestS = curS; bestE = arr.length - 1; }
+    return { start: bestS, end: bestE, length: bestL };
+  };
+  const yRange = findRange(rowBright, 0.45);
+  // Need at least 15% of image height — otherwise abort
+  if (yRange.length < H * 0.15) return img;
+  // Within the y range, scan columns
+  for (let x = 0; x < W; x++) {
+    let cnt = 0, total = 0;
+    for (let y = yRange.start; y <= yRange.end; y++) {
+      const i = (y * W + x) * 4;
+      const lum = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+      if (lum > 170) cnt++; total++;
+    }
+    colBright[x] = total ? cnt / total : 0;
+  }
+  const xRange = findRange(colBright, 0.45);
+  if (xRange.length < W * 0.15) return img;
+  // Add a small margin
+  const pad = 6;
+  const sx = Math.max(0, xRange.start - pad);
+  const sy = Math.max(0, yRange.start - pad);
+  const sw = Math.min(W - sx, xRange.end - xRange.start + 1 + pad * 2);
+  const sh = Math.min(H - sy, yRange.end - yRange.start + 1 + pad * 2);
+  // Skip if cropped region is essentially the full image
+  if (sw >= W * 0.95 && sh >= H * 0.95) return img;
+  // Return canvas as the source image for downstream preprocessing
+  // (ctx.drawImage accepts both <img> and <canvas> as the first arg)
+  const out = document.createElement('canvas');
+  out.width = sw; out.height = sh;
+  out.getContext('2d').drawImage(c, sx, sy, sw, sh, 0, 0, sw, sh);
+  return out;
+}
+
+function _preprocessVariant(img, mode) {
+  // mode 'soft': grayscale + light contrast (best for screen photos w/ moiré)
+  // mode 'hard': grayscale + strong contrast + unsharp mask (best for paper photos)
+  // Target smaller-dim ~1500: Tesseract accuracy plateaus around this size and
+  // processing time scales with W×H. Big phone photos (4000×3000) get DOWNSCALED.
+  const minDim = Math.min(img.width, img.height);
+  const maxDim = Math.max(img.width, img.height);
+  const TARGET = 1500;
+  let scale;
+  if (minDim < 500) scale = 3;            // tiny inputs: aggressive upscale
+  else if (minDim < 900) scale = 2;       // small: 2×
+  else scale = TARGET / minDim;           // ≥900: aim for 1500 smaller dim (down or mild up)
+  // Cap larger dim at 2200 to avoid extreme aspect ratios blowing up
+  if (maxDim * scale > 2200) scale = 2200 / maxDim;
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, w, h);
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  // Grayscale
+  const gray = new Uint8ClampedArray(w * h);
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    gray[p] = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+  }
+  if (mode === 'soft') {
+    // Light contrast (×1.5) — preserves character shapes through screen moiré
+    const C = 1.5, I = 128 - 128 * C;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      let v = gray[p] * C + I;
+      v = v < 0 ? 0 : v > 255 ? 255 : v;
+      d[i] = d[i+1] = d[i+2] = v;
+    }
+  } else {
+    // Hard mode: 3x3 unsharp mask + stronger contrast
+    const sharp = new Uint8ClampedArray(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x;
+        const c = gray[p];
+        // 3x3 blur (box) approximation for unsharp
+        let sum = 0, cnt = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy; if (yy < 0 || yy >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx; if (xx < 0 || xx >= w) continue;
+            sum += gray[yy * w + xx]; cnt++;
+          }
+        }
+        const blur = sum / cnt;
+        // Sharpened = orig + amount * (orig - blur)
+        let s = c + 1.2 * (c - blur);
+        s = s < 0 ? 0 : s > 255 ? 255 : s;
+        sharp[p] = s;
+      }
+    }
+    const C = 1.8, I = 128 - 128 * C;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      let v = sharp[p] * C + I;
+      v = v < 0 ? 0 : v > 255 ? 255 : v;
+      d[i] = d[i+1] = d[i+2] = v;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return canvas;
+}
+
+function _preprocessImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = _preprocessVariant(img, 'soft');
+      // Stash both variants for dual OCR pass
+      _preprocessImage._img = img;
+      URL.revokeObjectURL(img.src);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function runOCR(file) {
+  if (!file) return;
+  const modal = document.getElementById('ocrModal');
+  modal.classList.remove('hidden');
+  document.getElementById('ocrLoading').classList.remove('hidden');
+  document.getElementById('ocrResults').classList.add('hidden');
+  document.getElementById('ocrFooter').classList.add('hidden');
+  document.getElementById('ocrProgress').textContent = LANG === 'zh' ? '載入辨識引擎…' : 'Loading OCR engine…';
+
+  try {
+    // Prewarm may already be in flight from ocrBtn click; await its completion
+    await _prewarmOCR();
+    document.getElementById('ocrProgress').textContent = LANG === 'zh' ? '影像前處理…' : 'Pre-processing image…';
+    const img = await new Promise((res, rej) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = rej;
+      i.src = URL.createObjectURL(file);
+    });
+    document.getElementById('ocrProgress').textContent = LANG === 'zh' ? '辨識中…' : 'Recognising…';
+    // Run BOTH preprocesses then BOTH OCR passes in true parallel (two workers).
+    // worker1 = PSM 3 + soft preprocess, worker2 = PSM 11 + hard preprocess.
+    // Wall time ≈ max(pass1, pass2) instead of sum.
+    const canvas1 = _preprocessVariant(img, 'soft');
+    const canvas2 = _preprocessVariant(img, 'hard');
+    const [r1, r2] = await Promise.all([
+      _ocrWorker.recognize(canvas1),
+      _ocrWorker2.recognize(canvas2)
+    ]);
+    const text1 = r1.data.text;
+    const text2 = r2.data.text;
+    const filterAuto = (cands, fullText) => {
+      const top = window._lastSrcTop || new Map();
+      const hasDose = txt => /\d+(?:[.,]\d+)?\s*(?:m[abgw]|mc[ag]|μg|ug|cap[s]?|tab[s]?|ml|cc|iu|kg|gm|g|%|amp|vial|btl)/i.test(txt)
+        || /\b(?:po|iv|im|sc|sl|pr|pv|od|bid|tid|qid|qd|qod|qhs|qm|qw|qam|qpm|prn|stat|hs|ac|pc|qodpc|qdpc|qdac|tidpc|bidpc|ivd)\b/i.test(txt);
+      const lines = (fullText || '').split(/[\n\r]+/).filter(l => l.trim());
+      // Strong match: drug name (any source ≥4 chars) appears on a line that
+      // also has dose context. This is the dominant signal for real prescriptions.
+      const isStrongMatch = (c) => {
+        for (const s of c.sources) {
+          const probe = s.replace(/[^a-zA-Z0-9]/g, '').slice(0, 18).toLowerCase();
+          if (probe.length < 4) continue;
+          for (const line of lines) {
+            if (line.toLowerCase().replace(/[^a-z0-9]/g, '').includes(probe) && hasDose(line)) return true;
+          }
+        }
+        return false;
+      };
+      const passScore = (c) => {
+        const brandLen = (c.kind && c.kind.startsWith('EN: ')) ? c.kind.length - 4 :
+                         (c.kind && c.kind.startsWith('中文: ')) ? [...c.kind.slice(4)].length : 0;
+        const isGeneric = c.kind === 'generic';
+        return isGeneric ? c.score >= 90
+          : c.score >= 100 ? true
+          : (c.score >= 92 && brandLen >= 5);
+      };
+      // Stricter: the source that DROVE the top score (c.source) must have this
+      // drug as its winner. Prevents brand collisions like "Trazo" → "Traco" (92,
+      // Triamcinolone) being saved by an unrelated co-source whose top happens
+      // to be Triamcinolone via low-score noise.
+      const passTop = (c) => {
+        const t = top.get(c.source);
+        return !!(t && t.atc === c.drug.atc && t.name === c.drug.name);
+      };
+      // Clean-token evidence: the drug name appears as a standalone token in OCR
+      // (exact normalised match). Useful when prescription row is OCR-mangled but
+      // the same drug name surfaces clean elsewhere (header, summary, sidebar).
+      const imageHasDose = lines.some(hasDose);
+      const hasCleanToken = (c) => {
+        if (c.kind !== 'generic' || c.score < 100) return false;
+        const dn = c.drug.name.toLowerCase().replace(/[^a-z]/g, '');
+        if (dn.length < 5) return false;          // too-short names are risky
+        for (const s of c.sources) {
+          const sn = s.toLowerCase().replace(/[^a-z]/g, '');
+          if (sn === dn) return true;
+        }
+        return false;
+      };
+      // Strong path: drugs with either prescription-row dose evidence, OR
+      // clean-token evidence in a prescription-like image (has any dose line).
+      const strong = cands.filter(c => passScore(c) && passTop(c) && (
+        isStrongMatch(c) ||
+        (imageHasDose && hasCleanToken(c))
+      ));
+      // Fallback path (when prescription text is unreadable): require exact-
+      // match (score ≥ 100) AND generic name (no brand-substring), to keep
+      // false-positive risk low when relying on UI/sidebar text.
+      let chosen;
+      if (strong.length > 0) {
+        chosen = strong;
+      } else {
+        chosen = cands.filter(c => c.kind === 'generic' && c.score >= 100 && passTop(c));
+      }
+      const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+      return chosen.filter(c => {
+        const cn = norm(c.drug.name);
+        if (cn.length < 5) return true;
+        return !chosen.some(o => o !== c && norm(o.drug.name).length > cn.length && norm(o.drug.name).includes(cn));
+      });
+    };
+    // Combined text gives wider dose-context for cases where prescription panel
+    // is corrupted but the same drug name appears via the UI panel — the user
+    // accepts mild false-positive risk in exchange for catching such cases.
+    let allText = text1 + '\n' + text2;
+    let cands = _fuzzyMatchOCR(allText);
+    let toAdd = filterAuto(cands, allText);
+    // Chinese fallback: if Eng-only pass found nothing, try chi_tra worker.
+    // Adds ~3 s on Chinese-only images (rare); free on the common English case.
+    if (toAdd.length === 0) {
+      document.getElementById('ocrProgress').textContent = LANG === 'zh' ? '中文輔助辨識中…' : 'Chinese fallback recognising…';
+      try {
+        await _initChineseOCR();
+        const r3 = await _ocrChineseWorker.recognize(canvas1);
+        allText = allText + '\n' + r3.data.text;
+        cands = _fuzzyMatchOCR(allText);
+        toAdd = filterAuto(cands, allText);
+      } catch(e) { console.warn('Chinese fallback failed', e); }
+    }
+    URL.revokeObjectURL(img.src);
+    const skipped = cands.length - toAdd.length;
+    let added = 0;
+    for (const c of toAdd) { selected.push(c.drug); added++; }
+    closeOCR();
+    if (added) render();
+    const isZh = LANG === 'zh';
+    let msg;
+    if (added > 0) {
+      const names = toAdd.map(c => c.drug.name).join('、');
+      msg = (isZh ? `已加入 ${added} 個藥物:${names}` : `Added ${added} drug(s): ${names}`);
+    } else {
+      msg = isZh ? '未辨識到資料庫中的抗膽鹼藥物' : 'No anticholinergic drugs detected';
+    }
+    if (skipped > 0) msg += isZh ? `(略過 ${skipped} 個低信心候選)` : ` (${skipped} low-confidence skipped)`;
+    _showToast(msg);
+  } catch (e) {
+    console.error('OCR error', e);
+    document.getElementById('ocrProgress').textContent =
+      (LANG === 'zh' ? '辨識失敗:' : 'OCR failed: ') + (e.message || e);
+  }
+}
+
+function _showToast(msg) {
+  let toast = document.getElementById('ocrToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'ocrToast';
+    toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:12px 20px;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,0.25);z-index:60;font-size:14px;max-width:90vw;line-height:1.4;transition:opacity .25s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 4500);
+}
+
+function _renderOCRResults(rawText) {
+  document.getElementById('ocrLoading').classList.add('hidden');
+  document.getElementById('ocrResults').classList.remove('hidden');
+  document.getElementById('ocrFooter').classList.remove('hidden');
+
+  const isZh = LANG === 'zh';
+  const head = _ocrCandidates.length === 0
+    ? `<p class="text-slate-500 text-sm">${isZh ? '未辨識到資料庫中的藥物。請嘗試更清晰的影像或手動輸入。' : 'No matching drugs found. Try a clearer image or enter manually.'}</p>`
+    : `<p class="text-xs text-slate-500 mb-1">${isZh ? '勾選確認的藥物' : 'Confirm matched drugs'} (${_ocrCandidates.length}):</p>`;
+  const rows = _ocrCandidates.map((c, i) => {
+    const conf = c.score >= 95 ? 'bg-emerald-100 text-emerald-800' : c.score >= 75 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600';
+    // Auto-check only high-confidence generic matches or very high brand matches
+    const checked = ((c.kind === 'generic' && c.score >= 90) || c.score >= 100) ? 'checked' : '';
+    return `<label class="flex items-start gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer">
+      <input type="checkbox" data-idx="${i}" ${checked} class="mt-1 flex-shrink-0">
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-slate-800">${c.drug.name} <span class="ml-1 inline-block px-1.5 py-0.5 rounded text-xs ${conf}">${c.score}</span> <span class="text-xs text-slate-400 ml-1">${c.drug.atc}</span></div>
+        <div class="text-xs text-slate-500 truncate">${isZh ? '辨識' : 'Match'}: ${c.kind} · "<span class="text-slate-700">${(c.source || '').replace(/</g, '&lt;')}</span>"</div>
+      </div>
+    </label>`;
+  }).join('');
+  const raw = `<details class="mt-3 text-xs"><summary class="cursor-pointer text-slate-500">${isZh ? '原始 OCR 文字' : 'Raw OCR text'}</summary><pre class="mt-2 p-2 bg-slate-50 rounded text-xs whitespace-pre-wrap text-slate-600 max-h-32 overflow-y-auto">${(rawText || '').replace(/</g, '&lt;')}</pre></details>`;
+  document.getElementById('ocrResults').innerHTML = head + rows + raw;
+}
+
+function closeOCR() {
+  document.getElementById('ocrModal').classList.add('hidden');
+  document.getElementById('ocrFile').value = '';
+}
+
+function confirmOCR() {
+  const checks = document.querySelectorAll('#ocrResults input[type=checkbox]:checked');
+  let added = 0;
+  checks.forEach(c => {
+    const idx = +c.dataset.idx;
+    const cand = _ocrCandidates[idx];
+    if (cand) { selected.push(cand.drug); added++; }
+  });
+  closeOCR();
+  if (added) render();
+}
+window.runOCR = runOCR;
+window.closeOCR = closeOCR;
+window.confirmOCR = confirmOCR;
 
 // Populate datalist with all drugs (native browser autocomplete; works without JS events)
 (function() {
