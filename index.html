@@ -1109,9 +1109,11 @@ function _ocrLogger(m) {
   }
 }
 
-// Lazy-init two ENG-ONLY Tesseract workers in parallel. Eng-only is ~3× faster
-// than eng+chi_tra and catches all English drug names (the common Taiwan-NHI
-// prescription format). Chinese fallback is loaded later only if needed.
+// Lazy-init two ENG-ONLY Tesseract workers in parallel using the FAST trained
+// data (~12-30% faster than the default tessdata_best, no accuracy loss for our
+// drug-name targets). Eng-only is ~3× faster than eng+chi_tra; Chinese fallback
+// is loaded later only if needed.
+const _OCR_FAST_LANGPATH = 'https://tessdata.projectnaptha.com/4.0.0_fast';
 function _prewarmOCR() {
   if (_ocrInitPromise) return _ocrInitPromise;
   _ocrInitPromise = (async () => {
@@ -1119,8 +1121,8 @@ function _prewarmOCR() {
       await _loadScript('https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js');
     }
     const [w1, w2] = await Promise.all([
-      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger }),
-      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger })
+      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger, langPath: _OCR_FAST_LANGPATH }),
+      Tesseract.createWorker(['eng'], 1, { logger: _ocrLogger, langPath: _OCR_FAST_LANGPATH })
     ]);
     try { await w2.setParameters({ tessedit_pageseg_mode: '11' }); } catch(e) {}
     _ocrWorker = w1;
@@ -1250,12 +1252,22 @@ function _stripDoseFreq(tok) {
     .trim();
 }
 
+let _multiWordAliasCache = null;
 function _fuzzyMatchOCR(text) {
   const rawTokens = text.split(/[\n\r,;|·•・\(\)\[\]【】「」『』〝〞"'：:、,。\.!?]/g)
                        .map(s => s.trim()).filter(s => s.length >= 2);
   const cleaned = rawTokens.map(_stripDoseFreq).filter(s => s.length >= 2);
+  // Word-level tokens: drug names often sit inside noise like "N _ Drugname inj"
+  // — splitting cleaned tokens on whitespace surfaces "Drugname" by itself for
+  // tight Levenshtein scoring. Keep multi-word tokens too (for "Cough Mixture").
+  const wordLevel = [];
+  for (const t of cleaned) {
+    for (const w of t.split(/\s+/)) {
+      if (w.length >= 4) wordLevel.push(w);
+    }
+  }
   // Bigrams from cleaned (drug names sometimes split across columns)
-  const expanded = [...rawTokens, ...cleaned];
+  const expanded = [...rawTokens, ...cleaned, ...wordLevel];
   for (let i = 0; i < cleaned.length - 1; i++) expanded.push(cleaned[i] + ' ' + cleaned[i+1]);
   // Dedupe
   const seen = new Set();
@@ -1269,23 +1281,61 @@ function _fuzzyMatchOCR(text) {
     const cur = srcTop.get(tok);
     if (!cur || cur.score < score) srcTop.set(tok, { atc: drug.atc, name: drug.name, score });
   };
+  // Generic-first strategy (drug histories almost always include the generic name):
+  // - Generic names get a +10 boost so they beat brand matches on the same source
+  //   token, ensuring "Trazo" → Trazodone (generic) wins over any brand collision.
+  // - Brand matches require EXACT normalised equality (every character of the
+  //   brand must be present, in order, with nothing extra and no typos). This
+  //   eliminates fuzzy collisions like "Trans" (Captopril) ≈ "Trane" (Tranexamic).
+  // - Min brand length ≥ 6 — 5-char brands are too word-like to disambiguate.
+  const _exactNorm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+  // Multi-word drug aliases: first word matches when OCR mangles the rest.
+  // E.g. "Cough Mixture" → OCR'd as "CoughMixwe" — full-name fuzzy fails (Lev
+  // distance too high), but the unique first word "Cough" still substring-matches.
+  // Only enable for drugs whose first word is ≥5 chars AND unique among DRUGS.
+  if (!_multiWordAliasCache) {
+    const multi = DRUGS.filter(d => d.name.includes(' '));
+    const counts = {};
+    for (const d of multi) {
+      const fw = d.name.split(' ')[0].toLowerCase();
+      if (fw.length >= 5) counts[fw] = (counts[fw] || 0) + 1;
+    }
+    _multiWordAliasCache = multi
+      .map(d => ({ drug: d, alias: d.name.split(' ')[0] }))
+      .filter(a => a.alias.length >= 5 && counts[a.alias.toLowerCase()] === 1);
+  }
   for (const tok of final) {
+    const tn = _exactNorm(tok);
     for (const drug of DRUGS) {
       const sc = _scoreEN(tok, drug.name);
-      if (sc >= 50) { _addCand(map, drug, sc + 5, tok, 'generic'); noteTop(tok, drug, sc + 5); }
+      if (sc >= 50) { _addCand(map, drug, sc + 10, tok, 'generic'); noteTop(tok, drug, sc + 10); }
+    }
+    // First-word aliases for unique-first-word multi-word drugs
+    for (const a of _multiWordAliasCache) {
+      const sc = _scoreEN(tok, a.alias);
+      if (sc >= 88) { // require substring or better — partial first-word matches are too weak
+        _addCand(map, a.drug, sc + 10, tok, 'generic');
+        noteTop(tok, a.drug, sc + 10);
+      }
     }
     for (const atc in BRANDS) {
       const drug = DRUGS.find(d => d.atc === atc);
       if (!drug) continue;
       for (const brand of BRANDS[atc].en || []) {
-        if (brand.length < 5) continue; // skip too-short brand entries (extraction noise)
-        const sc = _scoreEN(tok, brand);
-        if (sc >= 55) { _addCand(map, drug, sc, tok, 'EN: ' + brand); noteTop(tok, drug, sc); }
+        if (brand.length < 6) continue;                  // skip short word-like brands
+        if (_exactNorm(brand) !== tn) continue;          // EXACT match only — no fuzzy
+        _addCand(map, drug, 100, tok, 'EN: ' + brand);
+        noteTop(tok, drug, 100);
       }
       for (const brand of BRANDS[atc].zh || []) {
-        if ([...brand].length < 2) continue;
-        const sc = _scoreZH(tok, brand);
-        if (sc >= 60) { _addCand(map, drug, sc, tok, '中文: ' + brand); noteTop(tok, drug, sc); }
+        if ([...brand].length < 3) continue;
+        // Chinese brand: also require exact (Tesseract Chinese OCR is too noisy
+        // for fuzzy matching to be reliable on character-level matches).
+        const bz = String(brand).replace(/[^一-鿿]/g, '');
+        const tz = String(tok).replace(/[^一-鿿]/g, '');
+        if (!bz || !tz || bz !== tz) continue;
+        _addCand(map, drug, 100, tok, '中文: ' + brand);
+        noteTop(tok, drug, 100);
       }
     }
   }
@@ -1484,18 +1534,20 @@ function _autoCropBright(img) {
 
 function _preprocessVariant(img, mode) {
   // mode 'soft': grayscale + light contrast (best for screen photos w/ moiré)
-  // mode 'hard': grayscale + strong contrast + unsharp mask (best for paper photos)
-  // Target smaller-dim ~1500: Tesseract accuracy plateaus around this size and
-  // processing time scales with W×H. Big phone photos (4000×3000) get DOWNSCALED.
+  // mode 'hard': legacy — kept callable but the runOCR pipeline no longer uses it
+  // Target smaller-dim ~1200: sweet spot for accuracy and speed. tessdata_fast
+  // resolves drug-name text reliably here. Smaller targets (1000-1100 px) drop
+  // marginal characters in low-contrast rows; larger ones tip past 3 s on phone
+  // photos.
   const minDim = Math.min(img.width, img.height);
   const maxDim = Math.max(img.width, img.height);
-  const TARGET = 1500;
+  const TARGET = 1200;
   let scale;
   if (minDim < 500) scale = 3;            // tiny inputs: aggressive upscale
-  else if (minDim < 900) scale = 2;       // small: 2×
-  else scale = TARGET / minDim;           // ≥900: aim for 1500 smaller dim (down or mild up)
-  // Cap larger dim at 2200 to avoid extreme aspect ratios blowing up
-  if (maxDim * scale > 2200) scale = 2200 / maxDim;
+  else if (minDim < 800) scale = 2;       // small: 2×
+  else scale = TARGET / minDim;           // ≥800: aim for 1200 smaller dim (down or mild up)
+  // Cap larger dim at 1800 to avoid extreme aspect ratios blowing up
+  if (maxDim * scale > 1800) scale = 1800 / maxDim;
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
   const canvas = document.createElement('canvas');
@@ -1586,14 +1638,15 @@ async function runOCR(file) {
       i.src = URL.createObjectURL(file);
     });
     document.getElementById('ocrProgress').textContent = LANG === 'zh' ? '辨識中…' : 'Recognising…';
-    // Run BOTH preprocesses then BOTH OCR passes in true parallel (two workers).
-    // worker1 = PSM 3 + soft preprocess, worker2 = PSM 11 + hard preprocess.
-    // Wall time ≈ max(pass1, pass2) instead of sum.
+    // Single SOFT preprocess shared between both workers. Hard preprocess was
+    // dropped — its sharpening was destroying low-contrast rows (e.g. test0506
+    // Cough Mixture line). Soft + PSM 11 (sparse-text) recovers the same rows
+    // that hard was meant for, without breaking anything.
+    // worker1 = PSM 3 (auto layout), worker2 = PSM 11 (sparse text). Parallel.
     const canvas1 = _preprocessVariant(img, 'soft');
-    const canvas2 = _preprocessVariant(img, 'hard');
     const [r1, r2] = await Promise.all([
       _ocrWorker.recognize(canvas1),
-      _ocrWorker2.recognize(canvas2)
+      _ocrWorker2.recognize(canvas1)
     ]);
     const text1 = r1.data.text;
     const text2 = r2.data.text;
@@ -1614,14 +1667,14 @@ async function runOCR(file) {
         }
         return false;
       };
-      const passScore = (c) => {
-        const brandLen = (c.kind && c.kind.startsWith('EN: ')) ? c.kind.length - 4 :
-                         (c.kind && c.kind.startsWith('中文: ')) ? [...c.kind.slice(4)].length : 0;
-        const isGeneric = c.kind === 'generic';
-        return isGeneric ? c.score >= 90
-          : c.score >= 100 ? true
-          : (c.score >= 92 && brandLen >= 5);
-      };
+      // Brand kinds always score exactly 100 (exact-only matching).
+      // Generic: ≥95 for strong-evidence path (drug name in dose-bearing line),
+      // ≥100 for clean-token-only path. Substring t.includes(n) is 88+10=98,
+      // letting it through ONLY when there's strong dose-line evidence —
+      // catches cases like OCR's "QIN CoughMixwe" containing the unique
+      // first-word alias "Cough" on a TIDPC dose line.
+      const passScoreStrong = (c) => c.kind !== 'generic' ? c.score >= 100 : c.score >= 95;
+      const passScoreClean = (c) => c.score >= 100;
       // Stricter: the source that DROVE the top score (c.source) must have this
       // drug as its winner. Prevents brand collisions like "Trazo" → "Traco" (92,
       // Triamcinolone) being saved by an unrelated co-source whose top happens
@@ -1646,18 +1699,18 @@ async function runOCR(file) {
       };
       // Strong path: drugs with either prescription-row dose evidence, OR
       // clean-token evidence in a prescription-like image (has any dose line).
-      const strong = cands.filter(c => passScore(c) && passTop(c) && (
-        isStrongMatch(c) ||
-        (imageHasDose && hasCleanToken(c))
+      const strong = cands.filter(c => passTop(c) && (
+        (passScoreStrong(c) && isStrongMatch(c)) ||
+        (passScoreClean(c) && imageHasDose && hasCleanToken(c))
       ));
-      // Fallback path (when prescription text is unreadable): require exact-
-      // match (score ≥ 100) AND generic name (no brand-substring), to keep
+      // Fallback path (when prescription text is unreadable): require generic
+      // exact match (score ≥ 110 with the +10 boost) AND passTop, to keep
       // false-positive risk low when relying on UI/sidebar text.
       let chosen;
       if (strong.length > 0) {
         chosen = strong;
       } else {
-        chosen = cands.filter(c => c.kind === 'generic' && c.score >= 100 && passTop(c));
+        chosen = cands.filter(c => c.kind === 'generic' && c.score >= 110 && passTop(c));
       }
       const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
       return chosen.filter(c => {
