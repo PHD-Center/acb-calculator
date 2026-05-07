@@ -15,14 +15,7 @@
 - **6 種評分量表整合**:ACB · ADS · GABS · m-ACB · KABS · ARS(介面內附各量表發表年代、作者、適用族群與原始文獻引用)
 - **122 種台灣常見藥物資料庫**(來源:PHDc)
 - **中英文商品名搜尋**:整合健保藥品資料庫 (NHI_ATCcode) 共 5,400 餘筆品牌名稱(英文 ≈2,300、中文 ≈3,150)
-- **拍照/上傳藥歷影像辨識**:整合 Tesseract.js OCR 直接辨識並自動加入,無需手動勾選。實測時間:乾淨螢幕截圖 **2–2.5 秒**,4032×3024 手機翻拍 **2.5–3.5 秒**
-  - **管線**:預設**兩顆 eng-only Tesseract worker 並行**,使用 `tessdata_fast` 訓練資料 (~4 MB),影像前處理共用一張 1200 px 灰階+對比 canvas,worker1 跑 PSM 3 (自動版型) 、worker2 跑 PSM 11 (sparse text),透過 `Promise.all` 真正並行於兩條 thread,wall-time = max 而非 sum
-  - **預熱**:使用者按下 📷 鈕的瞬間就同時開啟 file picker **並** 開始載入 Tesseract.js + 初始化兩顆 worker。等使用者選完檔案 (通常 5–10 s),worker 已就緒,實際辨識零等待
-  - **中文 fallback**:eng-only pass 完全沒抓到藥物時才動態載入 chi_tra worker (約 +3 s),處理罕見「整張處方只標中文藥品名」case
-  - **以成分 (generic) 為主**:藥歷幾乎一定列出英文成分。成分匹配採 Levenshtein 距離(允許 1 字差),且權重 +10 確保任何衝突時成分勝出。多字藥名(如 "Cough Mixture")自動建立首字 alias("Cough"),處理 OCR 把後段字打殘的情形(`Mixture` → `Mixwe`)
-  - **商品名須完全精確**:OCR token 經 normalize 後 **每一字** 與某品牌完全相等才算數(無模糊、無子字串)。最短 6 字以避免「Trans / Excel / Stable」這類常見英文字誤觸 Captopril / Hydralazine 等品牌
-  - **誤判防護**:驅動分數的 source token 必須對該藥物為最高分 (避免共現 source 干擾)、起始錨定滑動視窗 (避免 "metoclopramide" 誤觸 loperamide)、子字串完全包含時抑制較短藥名 (避免 Methylprednisolone 誤觸 Prednisolone)
-  - **建議影像**:直接螢幕截圖效果最佳;手機翻拍螢幕(反光、moiré)可能無法辨識,建議改用螢幕截圖或裁切後的清晰照片
+- **拍照/上傳藥歷影像辨識**:整合 Tesseract.js OCR 直接辨識並自動加入,無需手動勾選。實測時間:乾淨螢幕截圖 2–2.5 秒
 - **計算範圍說明**:外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關),依 BMJ 2023 原始研究方法
 - **心血管事件風險分級**(依 BMJ 2023 主分析與 sensitivity analysis;**30 天內**急性心血管事件風險):
   - ACB 1–2 → ×1.4 倍
