@@ -32,6 +32,51 @@
     #suggestions { position: static !important; box-shadow: none !important; border-color: #cbd5e1 !important; }
     .suggestion-item { padding-top: 14px !important; padding-bottom: 14px !important; }
   }
+
+  /* Print-only elements (hidden on screen) */
+  .print-only { display: none; }
+
+  /* ===== Print stylesheet — one-page A4 clinical report ===== */
+  @media print {
+    @page { size: A4; margin: 12mm 14mm; }
+    body { background: #fff !important; color: #000 !important; font-size: 9.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Hide everything not part of the report */
+    header, .input-section, #ocrModal, #emptyState, footer .footer-screen,
+    .no-print, #langZh, #langEn, .remove-btn, button[onclick*="open"], #suggestions,
+    #drugForm, #inputHintEl, #ocrBtn, #ocrHintEl, #methodNoteEl, #ocrFile,
+    #monitorCard, details {
+      display: none !important;
+    }
+    /* Show print-only nodes */
+    .print-only { display: block !important; }
+    .print-flex { display: flex !important; }
+    /* Compact, ink-friendly cards */
+    .max-w-5xl { max-width: 100% !important; padding: 0 !important; }
+    section, .rounded-2xl, .rounded-xl { border-radius: 4px !important; box-shadow: none !important; padding: 6px 8px !important; margin-bottom: 6px !important; break-inside: avoid; page-break-inside: avoid; }
+    section { border: 1px solid #cbd5e1 !important; }
+    h1, h2, h3 { color: #000 !important; }
+    h2 { font-size: 11pt !important; margin-bottom: 4px !important; }
+    h1 { font-size: 14pt !important; }
+    .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl { font-size: 11pt !important; }
+    .text-sm { font-size: 9pt !important; }
+    .text-xs { font-size: 8pt !important; }
+    /* Risk cards: keep 3-up grid in print, smaller padding */
+    .grid.md\:grid-cols-3 { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 6px !important; }
+    .grid.md\:grid-cols-3 > div { padding: 6px 8px !important; }
+    /* Drug table compact */
+    table { width: 100% !important; font-size: 9pt !important; }
+    th, td { padding: 2px 4px !important; }
+    /* Hide remove (✕) buttons in printed table */
+    .drug-table .remove-cell, .drug-table button { display: none !important; }
+    /* Print-only header with title + date */
+    .print-header { border-bottom: 1.5px solid #1e293b; margin-bottom: 8px !important; padding-bottom: 6px !important; }
+    .print-header h1 { margin: 0 0 2px 0; font-weight: 700; }
+    .print-header .meta { display: flex; justify-content: space-between; font-size: 8.5pt; color: #475569; }
+    /* Page-break controls */
+    section.no-break { break-inside: avoid; page-break-inside: avoid; }
+    /* Disclaimer footer for print */
+    .print-footer { font-size: 7.5pt !important; color: #64748b !important; margin-top: 6px !important; padding-top: 4px !important; border-top: 1px solid #cbd5e1 !important; line-height: 1.35; }
+  }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
@@ -62,7 +107,7 @@
   </header>
 
   <!-- Drug input section -->
-  <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6">
+  <section class="input-section bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6">
     <label id="inputLabelEl" class="block text-sm font-medium text-slate-700 mb-2">輸入病人藥物</label>
     <form id="drugForm" onsubmit="addFirstMatch(); return false;">
       <div class="relative flex gap-2">
@@ -155,6 +200,23 @@
       </table>
     </div>
   </section>
+
+  <!-- Print-only report header (title + date) -->
+  <div class="print-only print-header">
+    <h1 id="printTitle">抗膽鹼藥物負擔評估報告</h1>
+    <div class="meta">
+      <span id="printSubtitle">Anticholinergic Burden Calculator</span>
+      <span><span id="printDateLabel">評估日期</span>: <span id="printDate"></span></span>
+    </div>
+  </div>
+
+  <!-- Print / Export button (hidden on print itself) -->
+  <div id="printBtnWrap" class="hidden mb-3" style="text-align:right;">
+    <button type="button" id="printBtn" onclick="window.print()"
+            class="inline-flex items-center gap-1.5 px-3 py-2 border border-indigo-300 bg-indigo-50 text-indigo-800 rounded-lg text-xs font-medium hover:bg-indigo-100 transition no-print">
+      <span>🖨️</span> <span id="printBtnLabel">列印 / 匯出 PDF</span>
+    </button>
+  </div>
 
   <!-- Results & Recommendations -->
   <section id="resultsSection" class="hidden">
@@ -294,11 +356,17 @@
     <p id="emptyMsgEl" class="text-slate-500">輸入病人目前用藥開始計算抗膽鹼負擔</p>
   </section>
 
-  <footer class="mt-8 text-center text-xs text-slate-400">
+  <footer class="footer-screen mt-8 text-center text-xs text-slate-400">
     <p id="footerDisclaimer" class="text-slate-500 italic mb-2">Note: 本工具僅供醫療人員參考。</p>
     <p id="footerScales">Scales: ACB · ADS · GABS · mACB · KABS · ARS &nbsp;|&nbsp; 122 drugs from PHDc</p>
     <p id="footerRef" class="mt-1">Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156</p>
   </footer>
+
+  <!-- Print-only footer (compact disclaimer + reference) -->
+  <div class="print-only print-footer">
+    <p id="printDisclaimer">本工具僅供醫療人員參考;計算結果以 ≥65 歲族群之研究為依據。風險倍數為流行病學研究之相對風險,不代表個別病人絕對發生率。</p>
+    <p id="printRef" style="margin-top:2px;">Ref: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol</em> 2025;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156</p>
+  </div>
 
 </div>
 
@@ -438,6 +506,12 @@ const I18N = {
     footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
     inAppWarn: '⚠ 偵測到 in-app 瀏覽器(LINE/FB/IG 等),功能可能受限<br>請點右上角「⋯」選單 → <b>「以瀏覽器/Safari 開啟」</b>',
     noscript: '⚠ 此頁面需要啟用 JavaScript<br>請複製連結後以 <b>Safari</b> (iPhone) 或 <b>Chrome</b> (Android) 開啟',
+    printBtnLabel: '列印 / 匯出 PDF',
+    printTitle: '抗膽鹼藥物負擔評估報告',
+    printSubtitle: 'Anticholinergic Burden Calculator',
+    printDateLabel: '評估日期',
+    printDisclaimer: '本工具僅供醫療人員參考;計算結果以 ≥65 歲族群之研究為依據。風險倍數為流行病學研究之相對風險,不代表個別病人絕對發生率。',
+    printRef: 'Ref: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol</em> 2025;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
   },
   en: {
     title: "Anticholinergic Burden Calculator",
@@ -571,6 +645,12 @@ const I18N = {
     footerRef: 'Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
     inAppWarn: '⚠ In-app browser detected (LINE / FB / IG, etc.) — features may be limited.<br>Please open via the share menu → <b>"Open in browser/Safari"</b>.',
     noscript: '⚠ This page requires JavaScript.<br>Please open in <b>Safari</b> (iPhone) or <b>Chrome</b> (Android).',
+    printBtnLabel: 'Print / Export PDF',
+    printTitle: 'Anticholinergic Burden Assessment Report',
+    printSubtitle: 'Anticholinergic Burden Calculator',
+    printDateLabel: 'Assessment date',
+    printDisclaimer: 'For healthcare professional reference only. Estimates apply to adults aged ≥65 years per the source evidence. Multiplicative risks are population-level relative risks, not individual absolute incidence.',
+    printRef: 'Ref: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol</em> 2025;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156',
   },
 };
 
@@ -623,6 +703,10 @@ function applyStaticLang() {
     monitorCardTitle: 'monitorTitle', monitorCardMsg: 'monitorMsg',
     footerDisclaimer: 'disclaimer',
     footerScales: 'footerScales', footerRef: 'footerRef',
+    printBtnLabel: 'printBtnLabel',
+    printTitle: 'printTitle', printSubtitle: 'printSubtitle',
+    printDateLabel: 'printDateLabel',
+    printDisclaimer: 'printDisclaimer', printRef: 'printRef',
   };
   Object.keys(map).forEach(id => {
     const el = document.getElementById(id);
@@ -984,7 +1068,14 @@ function render() {
   $("drugCount").textContent = selected.length ? `(${selected.length})` : "";
   $("selectedSection").classList.toggle("hidden", !selected.length);
   $("resultsSection").classList.toggle("hidden", !selected.length);
+  $("printBtnWrap").classList.toggle("hidden", !selected.length);
   $("emptyState").classList.toggle("hidden", !!selected.length);
+  // Update print-only date stamp (locale-aware, falls back gracefully)
+  if (selected.length) {
+    const d = new Date();
+    const yyyy = d.getFullYear(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+    $("printDate").textContent = `${yyyy}-${mm}-${dd}`;
+  }
 
   $("selectedDrugs").innerHTML = selected.map((d, i) => {
     return `<tr class="border-b border-slate-100 fade-in">
