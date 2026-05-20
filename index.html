@@ -36,6 +36,28 @@
   /* Print-only elements (hidden on screen) */
   .print-only { display: none; }
 
+  /* ===== Splash screen (PHDc logo flash on first paint) ===== */
+  #splashScreen {
+    position: fixed; inset: 0; background: #ffffff;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; pointer-events: none;
+    animation: splashFade 1.3s ease-out forwards;
+  }
+  #splashScreen img {
+    max-width: min(80vw, 600px); max-height: 50vh; width: auto; height: auto;
+    opacity: 0; animation: splashLogo 1s ease-out forwards;
+  }
+  @keyframes splashFade {
+    0%, 77%   { opacity: 1; visibility: visible; }
+    100%      { opacity: 0; visibility: hidden; }
+  }
+  @keyframes splashLogo {
+    0%   { opacity: 0; transform: scale(0.98); }
+    40%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @media print { #splashScreen { display: none !important; } }
+
   /* ===== Print stylesheet — one-page A4 clinical report ===== */
   @media print {
     @page { size: A4; margin: 12mm 14mm; }
@@ -68,10 +90,11 @@
     th, td { padding: 2px 4px !important; }
     /* Hide remove (✕) buttons in printed table */
     .drug-table .remove-cell, .drug-table button { display: none !important; }
-    /* Print-only header with title + date */
+    /* Print-only header with title + date + logo */
     .print-header { border-bottom: 1.5px solid #1e293b; margin-bottom: 8px !important; padding-bottom: 6px !important; }
     .print-header h1 { margin: 0 0 2px 0; font-weight: 700; }
-    .print-header .meta { display: flex; justify-content: space-between; font-size: 8.5pt; color: #475569; }
+    .print-header .meta { font-size: 8.5pt; color: #475569; }
+    .print-header img { max-height: 34px; }
     /* Page-break controls */
     section.no-break { break-inside: avoid; page-break-inside: avoid; }
     /* Disclaimer footer for print */
@@ -80,6 +103,22 @@
 </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<!-- Splash screen: PHDc logo flashes for ~1s. Skipped when user just came
+     from the danielhttsai.github.io redirect (which already showed the logo). -->
+<div id="splashScreen">
+  <img src="phdc-logo.png" alt="Population Health Data Center NCKU" onerror="this.parentNode.remove();">
+</div>
+<script>
+  // Skip splash if user just came from the redirect repo (already saw logo)
+  if (document.referrer && document.referrer.indexOf('danielhttsai.github.io') !== -1) {
+    var sp = document.getElementById('splashScreen');
+    if (sp) sp.remove();
+  } else {
+    // Tidy up after animation finishes so it doesn't interfere with screen readers
+    setTimeout(function() { var sp = document.getElementById('splashScreen'); if (sp) sp.remove(); }, 1400);
+  }
+</script>
 
 <noscript>
   <div style="background:#fee2e2;color:#7f1d1d;padding:14px;text-align:center;font-size:14px;line-height:1.5;border-bottom:2px solid #fecaca;">
@@ -201,12 +240,20 @@
     </div>
   </section>
 
-  <!-- Print-only report header (title + date) -->
+  <!-- Print-only report header (title + date + institutional logo) -->
   <div class="print-only print-header">
-    <h1 id="printTitle">抗膽鹼藥物負擔評估報告</h1>
-    <div class="meta">
-      <span id="printSubtitle">Anticholinergic Burden Calculator</span>
-      <span><span id="printDateLabel">評估日期</span>: <span id="printDate"></span></span>
+    <div class="print-header-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <h1 id="printTitle">抗膽鹼藥物負擔評估報告</h1>
+        <div class="meta">
+          <span id="printSubtitle">Anticholinergic Burden Calculator</span>
+          &nbsp;·&nbsp;
+          <span><span id="printDateLabel">評估日期</span>: <span id="printDate"></span></span>
+        </div>
+      </div>
+      <img src="phdc-logo.png" alt="Population Health Data Center NCKU"
+           style="height:34px;width:auto;"
+           onerror="this.style.display='none';">
     </div>
   </div>
 
@@ -357,6 +404,9 @@
   </section>
 
   <footer class="footer-screen mt-8 text-center text-xs text-slate-400">
+    <img src="phdc-logo.png" alt="Population Health Data Center NCKU"
+         style="max-width:240px;width:100%;height:auto;opacity:0.85;margin:0 auto 10px;display:block;"
+         onerror="this.style.display='none';">
     <p id="footerDisclaimer" class="text-slate-500 italic mb-2">Note: 本工具僅供醫療人員參考。</p>
     <p id="footerScales">Scales: ACB · ADS · GABS · mACB · KABS · ARS &nbsp;|&nbsp; 122 drugs from PHDc</p>
     <p id="footerRef" class="mt-1">Reference: Huang et al. <em>BMJ</em> 2023;382:e076045 · Yang et al. <em>Clin Epidemiol.</em> 2025 Sep 30;17:787–796 · Tsai et al. <em>Eur Heart J</em> 2025;46(47):5143–5156</p>
