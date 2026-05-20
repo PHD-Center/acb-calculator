@@ -336,6 +336,43 @@
       <p id="monitorCardMsg" class="text-xs text-slate-600">近期 (30 天內) 新增或加量抗膽鹼藥物為高風險時段。優先觀察:心悸、胸痛、暈厥、新發呼吸道症狀、認知變化。</p>
     </div>
 
+    <!-- Cite this tool -->
+    <details class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <summary class="font-semibold text-slate-900 flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="text-indigo-600">📚</span> <span id="citeTitleEl">引用此工具</span></span>
+        <span id="citeExpandEl" class="text-slate-400 text-sm">展開</span>
+      </summary>
+      <div class="mt-4 space-y-3 text-sm text-slate-700">
+        <p id="citeIntroEl" class="text-slate-600">若於論文、報告或臨床指引中提及本工具,請以下列任一格式引用,或下載 .ris 匯入 EndNote / Zotero / Mendeley:</p>
+        <div>
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-xs font-medium text-slate-500">JAMA</span>
+            <button type="button" onclick="_copyCitation('citeJAMA', this)" class="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-100 transition no-print">📋 <span class="copy-label">複製</span></button>
+          </div>
+          <code id="citeJAMA" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">Tsai DHT. Anticholinergic Burden Calculator. Population Health Data Center, National Cheng Kung University. Published 2026. Accessed <span id="citeAccessed"></span>. https://phd-center.github.io/acb-calculator/</code>
+        </div>
+        <div>
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-xs font-medium text-slate-500">BibTeX</span>
+            <button type="button" onclick="_copyCitation('citeBib', this)" class="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-100 transition no-print">📋 <span class="copy-label">複製</span></button>
+          </div>
+          <code id="citeBib" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">@misc{tsai2026acb,
+  author       = {Tsai, Daniel H.-T.},
+  title        = {Anticholinergic Burden Calculator},
+  year         = {2026},
+  publisher    = {Population Health Data Center, NCKU},
+  howpublished = {\url{https://phd-center.github.io/acb-calculator/}}
+}</code>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <button type="button" id="citeRisBtn" onclick="_downloadRIS()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition no-print" style="background:#4f46e5;color:#fff;">
+            <span>⬇️</span> <span id="citeRisLabel">下載 .ris (EndNote / Zotero / Mendeley)</span>
+          </button>
+        </div>
+        <p id="citeNoteEl" class="text-xs text-slate-500 mt-2">若引用個別風險倍數或量表分數時,亦請一併引用對應之原始研究(見「文獻證據摘要」段落)。</p>
+      </div>
+    </details>
+
     <!-- Evidence -->
     <details class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6">
       <summary class="font-semibold text-slate-900 flex items-center justify-between">
@@ -504,6 +541,11 @@ const I18N = {
     monitorTitle: "監測建議",
     monitorMsg: "近期 (30 天內) 新增或加量抗膽鹼藥物為高風險時段。優先觀察:心悸、胸痛、暈厥、新發呼吸道症狀、認知變化。",
     emptyMsg: "輸入病人目前用藥開始計算抗膽鹼負擔",
+    citeTitle: "引用此工具",
+    citeExpand: "展開",
+    citeIntro: "若於論文、報告或臨床指引中提及本工具,請以下列任一格式引用,或下載 .ris 匯入 EndNote / Zotero / Mendeley:",
+    citeRisLabel: "下載 .ris (EndNote / Zotero / Mendeley)",
+    citeNote: "若引用個別風險倍數或量表分數時,亦請一併引用對應之原始研究(見「文獻證據摘要」段落)。",
     evidenceTitle: "文獻證據摘要",
     evExpand: "展開",
     evCvTitle: "急性心血管事件 (BMJ 2023)",
@@ -643,6 +685,11 @@ const I18N = {
     monitorTitle: "Monitoring recommendations",
     monitorMsg: "Recent (within 30 days) drug additions or dose increases are high-risk windows. Watch for: palpitations, chest pain, syncope, new respiratory symptoms, and cognitive changes.",
     emptyMsg: "Enter the patient's current medications to begin",
+    citeTitle: "Cite this tool",
+    citeExpand: "Expand",
+    citeIntro: "When mentioning this tool in papers, reports or clinical guidance, please cite using one of the formats below — or download .ris to import into EndNote / Zotero / Mendeley:",
+    citeRisLabel: "Download .ris (EndNote / Zotero / Mendeley)",
+    citeNote: "When citing specific risk multipliers or scale scores, please also cite the corresponding source studies (see the Evidence summary section).",
     evidenceTitle: "Evidence summary",
     evExpand: "Expand",
     evCvTitle: "Acute cardiovascular events (BMJ 2023)",
@@ -740,6 +787,8 @@ function applyStaticLang() {
     selectedTitle: 'selected', clearAll: 'clearAll',
     thDrug: 'colDrug', thTotal: 'colTotal',
     emptyMsgEl: 'emptyMsg',
+    citeTitleEl: 'citeTitle', citeExpandEl: 'citeExpand',
+    citeIntroEl: 'citeIntro', citeRisLabel: 'citeRisLabel', citeNoteEl: 'citeNote',
     evidenceTitleEl: 'evidenceTitle', evExpandEl: 'evExpand',
     evCvTitleEl: 'evCvTitle', evCvDescEl: 'evCvDesc',
     evCvL1El: 'evCvL1', evCvL2El: 'evCvL2', evCvL3El: 'evCvL3', evCvL4El: 'evCvL4', evCvL5El: 'evCvL5',
@@ -1125,6 +1174,12 @@ function render() {
     const d = new Date();
     const yyyy = d.getFullYear(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
     $("printDate").textContent = `${yyyy}-${mm}-${dd}`;
+    // JAMA "Accessed" date — display in en-US month-name style (e.g. "May 21, 2026")
+    const ca = document.getElementById('citeAccessed');
+    if (ca) {
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      ca.textContent = `${monthNames[d.getMonth()]} ${d.getDate()}, ${yyyy}`;
+    }
   }
 
   $("selectedDrugs").innerHTML = selected.map((d, i) => {
@@ -1273,6 +1328,62 @@ function _prewarmOCR() {
   return _ocrInitPromise;
 }
 window._prewarmOCR = _prewarmOCR;
+
+// ===== Citation helpers =====
+function _copyCitation(elId, btn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const text = el.textContent.replace(/\s+\.$/, '');
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  };
+  const ok = () => {
+    const lbl = btn?.querySelector('.copy-label');
+    if (!lbl) return;
+    const orig = lbl.textContent;
+    lbl.textContent = LANG === 'zh' ? '已複製 ✓' : 'Copied ✓';
+    setTimeout(() => { lbl.textContent = orig; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(ok).catch(() => { fallback(); ok(); });
+  } else {
+    fallback(); ok();
+  }
+}
+window._copyCitation = _copyCitation;
+
+function _downloadRIS() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const accessed = `${yyyy}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+  // TY-COMP = Computer Program (closest match for an online calculator).
+  // Reference managers (EndNote, Zotero, Mendeley) all import this cleanly.
+  const ris = [
+    'TY  - COMP',
+    'AU  - Tsai, Daniel H.-T.',
+    'TI  - Anticholinergic Burden Calculator',
+    'PY  - 2026',
+    'PB  - Population Health Data Center, National Cheng Kung University',
+    'CY  - Tainan, Taiwan',
+    'UR  - https://phd-center.github.io/acb-calculator/',
+    'Y2  - ' + accessed,
+    'N1  - Online clinical decision-support tool integrating six anticholinergic burden scales (ACB, ADS, GABS, m-ACB, KABS, ARS) with risk estimates from BMJ 2023, Clin Epidemiol 2025, and Eur Heart J 2025.',
+    'LA  - en',
+    'ER  - ',
+    ''
+  ].join('\r\n');
+  const blob = new Blob([ris], { type: 'application/x-research-info-systems' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'acb-calculator.ris';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+window._downloadRIS = _downloadRIS;
 
 // Lazy-load chi_tra worker — only invoked when English pass returns 0 drugs.
 // Adds ~3 s on Chinese-only images, free on English images.
