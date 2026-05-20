@@ -6,7 +6,7 @@
 
 ## 線上使用
 
-👉 **<https://danielhttsai.github.io/acb-calculator/>**
+👉 **<https://phdc.github.io/acb-calculator/>**
 
 手機、平板、電腦皆可使用。輸入病人目前用藥即時計算總抗膽鹼負擔,並依研究實證提供分級風險與替代藥物建議。
 
