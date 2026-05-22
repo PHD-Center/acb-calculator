@@ -73,4 +73,4 @@
 
 ---
 
-*Maintained by Daniel H-T Tsai*
+*Maintained by Anticholinergic Burden Working Group, PHDc, NCKU (Tsai DH-T, Lai EC-C)*

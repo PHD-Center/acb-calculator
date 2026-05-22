@@ -349,20 +349,20 @@
             <span class="text-xs font-medium text-slate-500">JAMA</span>
             <button type="button" onclick="_copyCitation('citeJAMA', this)" class="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-100 transition no-print">📋 <span class="copy-label">複製</span></button>
           </div>
-          <code id="citeJAMA" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">PHDc Anticholinergic Burden Working Group; Tsai DHT, Lai EC-C, eds. Anticholinergic Burden Calculator. Population Health Data Center, National Cheng Kung University. Published 2026. Accessed <span id="citeAccessed"></span>. https://phd-center.github.io/acb-calculator/</code>
+          <code id="citeJAMA" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">Anticholinergic Burden Working Group, PHDc, NCKU; Tsai DH-T, Lai EC-C. Anticholinergic Burden Calculator. Population Health Data Center, National Cheng Kung University. Published 2026. Accessed <span id="citeAccessed"></span>. https://phd-center.github.io/acb-calculator/</code>
         </div>
         <div>
           <div class="flex items-center justify-between gap-2 mb-1">
             <span class="text-xs font-medium text-slate-500">BibTeX</span>
             <button type="button" onclick="_copyCitation('citeBib', this)" class="text-xs px-2 py-1 border border-slate-300 rounded hover:bg-slate-100 transition no-print">📋 <span class="copy-label">複製</span></button>
           </div>
-          <code id="citeBib" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">@misc{phdc2026acb,
-  author       = {{PHDc Anticholinergic Burden Working Group}},
-  editor       = {Tsai, Daniel H.-T. and Lai, E. C.-C.},
+          <code id="citeBib" class="block bg-slate-50 border border-slate-200 rounded p-2 text-xs leading-relaxed whitespace-pre-wrap break-all">@misc{acbwg2026,
+  author       = {{Anticholinergic Burden Working Group, PHDc, NCKU}},
   title        = {Anticholinergic Burden Calculator},
   year         = {2026},
   publisher    = {Population Health Data Center, National Cheng Kung University},
-  howpublished = {\url{https://phd-center.github.io/acb-calculator/}}
+  howpublished = {\url{https://phd-center.github.io/acb-calculator/}},
+  note         = {Lead developer: Tsai DH-T; principal investigator: Lai EC-C.}
 }</code>
         </div>
         <div class="flex items-center gap-2 pt-1">
@@ -1365,15 +1365,16 @@ function _downloadRIS() {
   // Reference managers (EndNote, Zotero, Mendeley) all import this cleanly.
   const ris = [
     'TY  - COMP',
-    'AU  - PHDc Anticholinergic Burden Working Group',
-    'A2  - Tsai, Daniel H.-T.',
-    'A2  - Lai, E. C.-C.',
+    // Trailing comma signals "group/corporate author" to EndNote/Zotero,
+    // preventing it from being parsed as "Last, First" (commas inside the name).
+    'AU  - Anticholinergic Burden Working Group, PHDc, NCKU,',
     'TI  - Anticholinergic Burden Calculator',
     'PY  - 2026',
     'PB  - Population Health Data Center, National Cheng Kung University',
     'CY  - Tainan, Taiwan',
     'UR  - https://phd-center.github.io/acb-calculator/',
     'Y2  - ' + accessed,
+    'N1  - Lead developer: Tsai DH-T; principal investigator: Lai EC-C.',
     'N1  - Online clinical decision-support tool integrating six anticholinergic burden scales (ACB, ADS, GABS, m-ACB, KABS, ARS) with risk estimates from BMJ 2023, Clin Epidemiol 2025, and Eur Heart J 2025.',
     'LA  - en',
     'ER  - ',
