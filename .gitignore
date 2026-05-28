@@ -1,0 +1,9 @@
+# Ignore everything by default, then whitelist only the files that belong on
+# the public GitHub Pages repo (phd-center/acb-calculator).
+*
+
+# Allow the production app + docs + logo + this ignore file
+!index.html
+!README.md
+!phdc-logo.png
+!.gitignore

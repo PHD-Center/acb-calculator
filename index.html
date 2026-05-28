@@ -36,6 +36,93 @@
   /* Print-only elements (hidden on screen) */
   .print-only { display: none; }
 
+  /* ===== Feedback panel (right-side slide-in drawer) ===== */
+  #feedbackCard {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    z-index: 50; pointer-events: auto;
+    width: 100%; max-width: 440px;
+    display: flex; align-items: stretch; justify-content: flex-end;
+    background: transparent;  /* no backdrop — calculator stays visible */
+    animation: fbSlideIn .25s ease-out;
+  }
+  @keyframes fbSlideIn {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0); }
+  }
+  .fb-panel-inner {
+    background: #fff;
+    width: 100%; height: 100vh; max-height: 100vh;
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 20px 22px; box-sizing: border-box;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
+  }
+  /* Mobile: full-width sheet with backdrop (modal-style) */
+  @media (max-width: 640px) {
+    #feedbackCard { max-width: 100%; background: rgba(15,23,42,0.5); }
+    .fb-panel-inner { max-height: 92vh; height: 92vh; border-left: 0; border-radius: 16px 16px 0 0; align-self: flex-end; box-shadow: 0 -8px 24px rgba(15,23,42,0.2); }
+    #feedbackCard { animation: fbSlideUp .25s ease-out; align-items: flex-end; }
+    @keyframes fbSlideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+  }
+
+  /* ===== Floating feedback button (FAB) with attention pulse ===== */
+  #fbFloatBtn { animation: fbPulse 2.4s ease-in-out infinite; }
+  @keyframes fbPulse {
+    0%, 100% { box-shadow: 0 10px 25px rgba(79,70,229,0.45), 0 4px 10px rgba(0,0,0,0.15), 0 0 0 0 rgba(79,70,229,0.55); }
+    50%      { box-shadow: 0 10px 25px rgba(79,70,229,0.45), 0 4px 10px rgba(0,0,0,0.15), 0 0 0 12px rgba(79,70,229,0); }
+  }
+  #fbFloatBtn:hover { animation: none; }
+  @media (max-width: 480px) {
+    #fbFloatBtn { bottom: 16px !important; right: 16px !important; padding: 12px 16px !important; }
+    #fbFloatBtnLabel { display: none; }
+  }
+
+  /* ===== Demographic chips (Role / Years / Specialty) ===== */
+  /* Grid layouts enforce row counts even when text width varies:
+     - Role (5 options)  → 1 row × 5 cols
+     - Years (4 options) → 1 row × 4 cols
+     - Specialty (9)     → 2 rows × 5 cols (with last cell empty) */
+  #fbDemogRoleOpts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  #fbDemogYearsOpts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  #fbDemogSpecOpts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .fb-chip {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 6px 6px; border: 1px solid #cbd5e1; border-radius: 9999px;
+    cursor: pointer; transition: all .15s; background: #fff;
+    font-size: 11.5px; color: #475569;
+    white-space: nowrap;         /* keep chip text on one line */
+    min-width: 0;                /* allow grid cell to shrink */
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .fb-chip > span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .fb-chip:hover { border-color: #818cf8; background: #eef2ff; }
+  .fb-chip input[type=radio] { accent-color: #4f46e5; margin: 0; flex-shrink: 0; }
+  .fb-chip:has(input:checked) { border-color: #4f46e5; background: #eef2ff; color: #312e81; font-weight: 600; }
+
+  /* ===== Feedback survey (5-point Likert) ===== */
+  /* 5-column grid — keeps all 5 options on one row even in narrow side panel */
+  .fb-likert {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px; align-items: stretch;
+  }
+  .fb-likert label {
+    min-width: 0; max-width: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    padding: 7px 2px; border: 1px solid #cbd5e1; border-radius: 8px;
+    cursor: pointer; transition: all .15s; background: #fff;
+    text-align: center; font-size: 10.5px; line-height: 1.25; color: #475569;
+    word-break: keep-all;
+  }
+  .fb-likert label:hover { border-color: #818cf8; background: #eef2ff; }
+  .fb-likert input[type=radio] { accent-color: #4f46e5; }
+  .fb-likert input[type=radio]:checked + .fb-likert-num { color: #4f46e5; font-weight: 700; }
+  .fb-likert label:has(input:checked) { border-color: #4f46e5; background: #eef2ff; color: #312e81; }
+  .fb-likert-num { font-size: 13px; font-weight: 600; color: #64748b; }
+
   /* ===== Splash screen (PHDc logo flash on first paint) ===== */
   #splashScreen {
     position: fixed; inset: 0; background: #ffffff;
@@ -336,6 +423,87 @@
       <p id="monitorCardMsg" class="text-xs text-slate-600">近期 (30 天內) 新增或加量抗膽鹼藥物為高風險時段。優先觀察:心悸、胸痛、暈厥、新發呼吸道症狀、認知變化。</p>
     </div>
 
+    <!-- Feedback panel (right-side drawer) — opened via floating button -->
+    <div id="feedbackCard" class="hidden no-print">
+     <div class="fb-panel-inner">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-slate-900 flex items-center gap-2">
+          <span class="text-indigo-600">📝</span> <span id="fbTitleEl">使用回饋(可選,匿名)</span>
+        </h3>
+        <button type="button" onclick="document.getElementById('feedbackCard').classList.add('hidden');" class="text-slate-400 hover:text-red-600 text-xl leading-none px-2" aria-label="Close">✕</button>
+      </div>
+      <form id="fbForm" class="space-y-4" onsubmit="return _submitFeedback(event);">
+        <p id="fbIntroEl" class="text-xs text-slate-500 leading-relaxed"></p>
+
+        <!-- Demographics (for stratification) -->
+        <div class="border-t border-slate-200 pt-3 space-y-3">
+          <p id="fbDemogTitleEl" class="text-xs font-medium text-slate-500 uppercase tracking-wide">基本資料(用於分組分析)</p>
+          <div class="fb-q">
+            <p class="text-sm font-medium text-slate-800 mb-1.5"><span id="fbDemogRoleEl">角色</span></p>
+            <div id="fbDemogRoleOpts" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div class="fb-q">
+            <p class="text-sm font-medium text-slate-800 mb-1.5"><span id="fbDemogYearsEl">執業年資</span></p>
+            <div id="fbDemogYearsOpts" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div class="fb-q">
+            <p class="text-sm font-medium text-slate-800 mb-1.5"><span id="fbDemogSpecEl">專科 / 部門</span></p>
+            <div id="fbDemogSpecOpts" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-200 pt-3">
+          <p class="text-xs font-medium text-slate-500 uppercase tracking-wide" id="fbSurveyTitleEl">使用體驗評估</p>
+        </div>
+
+        <!-- Q1–Q5: 5-point Likert -->
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q1.</span> <span id="fbQ1El"></span></p>
+          <div class="fb-likert" data-q="q1"></div>
+        </div>
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q2.</span> <span id="fbQ2El"></span></p>
+          <div class="fb-likert" data-q="q2"></div>
+        </div>
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q3.</span> <span id="fbQ3El"></span></p>
+          <div class="fb-likert" data-q="q3"></div>
+        </div>
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q4.</span> <span id="fbQ4El">我相信本工具呈現的風險估計具有臨床參考價值。</span></p>
+          <div class="fb-likert" data-q="q4"></div>
+        </div>
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q5.</span> <span id="fbQ5El"></span></p>
+          <div class="fb-likert" data-q="q5"></div>
+        </div>
+
+        <!-- Q6: open-ended qualitative -->
+        <div class="fb-q">
+          <p class="text-sm font-medium text-slate-800 mb-1.5"><span class="text-indigo-600 mr-1">Q6.</span> <span id="fbQ6El">您對本工具還有哪些建議?(漏掉的藥物、應加入的風險指標、想看到的功能、不適用的情境)</span></p>
+          <textarea name="q6_qualitative" rows="3" maxlength="2000" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition" placeholder=""></textarea>
+        </div>
+
+        <!-- Hidden context (populated dynamically by render() before submit) -->
+        <input type="hidden" name="ctx_acb_total" value="0">
+        <input type="hidden" name="ctx_drug_count" value="0">
+        <input type="hidden" name="ctx_drug_list" value="">
+        <input type="hidden" name="ctx_language" value="">
+        <input type="hidden" name="ctx_timestamp" value="">
+        <input type="hidden" name="ctx_user_agent" value="">
+        <!-- Formspree honeypot for spam protection -->
+        <input type="text" name="_gotcha" style="display:none">
+
+        <div class="flex items-center gap-3 pt-1">
+          <button type="submit" id="fbSubmitBtn" class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed" style="background:#4f46e5;color:#fff;">
+            <span id="fbSubmitLabel">提交回饋</span>
+          </button>
+          <span id="fbStatusMsg" class="text-xs"></span>
+        </div>
+      </form>
+     </div>
+    </div>
+
     <!-- Cite this tool -->
     <details class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4 sm:mb-6">
       <summary class="font-semibold text-slate-900 flex items-center justify-between">
@@ -440,6 +608,15 @@
     <div class="text-5xl mb-3">💊</div>
     <p id="emptyMsgEl" class="text-slate-500">輸入病人目前用藥開始計算抗膽鹼負擔</p>
   </section>
+
+  <!-- Floating feedback FAB — shows when there's an evaluation to react to -->
+  <button type="button" id="fbFloatBtn" class="hidden no-print"
+          onclick="document.getElementById('feedbackCard').classList.remove('hidden');"
+          style="position:fixed;bottom:24px;right:24px;z-index:40;display:none;align-items:center;gap:8px;padding:14px 20px;background:#4f46e5;color:#fff;border:0;border-radius:9999px;font-weight:600;font-size:14px;box-shadow:0 10px 25px rgba(79,70,229,0.45),0 4px 10px rgba(0,0,0,0.15);cursor:pointer;transition:transform .15s,box-shadow .15s;"
+          onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 14px 32px rgba(79,70,229,0.55),0 6px 14px rgba(0,0,0,0.2)';"
+          onmouseout="this.style.transform='';this.style.boxShadow='0 10px 25px rgba(79,70,229,0.45),0 4px 10px rgba(0,0,0,0.15)';">
+    <span style="font-size:18px;">📝</span> <span id="fbFloatBtnLabel">給我們回饋</span>
+  </button>
 
   <footer class="footer-screen mt-8 text-center text-xs text-slate-400">
     <img src="phdc-logo.png" alt="Population Health Data Center NCKU"
@@ -547,6 +724,34 @@ const I18N = {
     citeIntro: "若於論文、報告或臨床指引中提及本工具,請以下列任一格式引用,或下載 .ris 匯入 EndNote / Zotero / Mendeley:",
     citeRisLabel: "下載 .ris (EndNote / Zotero / Mendeley)",
     citeNote: "若引用個別風險倍數或量表分數時,亦請一併引用對應之原始研究(見「文獻證據摘要」段落)。",
+    fbTitle: "使用回饋(可選,匿名)",
+    fbExpand: "展開",
+    fbFloatBtnLabel: "給我們回饋",
+    fbDemogTitle: "基本資料(用於分組分析)",
+    fbSurveyTitle: "使用體驗評估",
+    fbDemogRole: "角色",
+    fbDemogYears: "執業年資",
+    fbDemogSpec: "專科 / 部門",
+    fbRoleOpts: ["醫師", "藥師", "護理師", "學生", "其他"],
+    fbYearsOpts: ["<5 年", "5–10 年", "11–20 年", ">20 年"],
+    fbSpecOpts: ["老年醫學", "家庭醫學", "一般內科", "精神科", "神經內科", "急診醫學", "藥事服務", "護理", "其他"],
+    fbIntro: '您的回饋有助於改善本工具與後續研究。<b>提交為匿名</b>,僅含本問卷答案與基本使用情境(本次評估 ACB 分數、藥物數、瀏覽器語言、提交時間),不收集任何個人識別資訊。本研究經 NCKU IRB 倫理審議覆核;繼續提交即表示您同意上述資料用於工具改進與後續研究發表。<br><br><b>請注意</b>:本工具為臨床決策<b>輔助</b>(decision support),非取代醫師判斷。實際處方仍應綜合病人個別狀況、共病、適應症、藥物交互作用與臨床經驗綜合判斷。請以「將本工具作為其中一項參考依據」的角度回答以下問題。',
+    fbQ1: "本工具的操作流暢、容易上手。",
+    fbQ2: "本工具的計算結果有助於我評估病人的抗膽鹼負擔。",
+    fbQ3: "本工具的評估結果,會成為我針對該病人處方決策(是否調整、減量、停藥、換藥)的考量依據之一。",
+    fbQ4: "我相信本工具呈現的風險估計具有臨床參考價值。",
+    fbQ5: "未來我願意繼續使用本工具於我的臨床工作中作為輔助參考。",
+    fbQ6: "您對本工具還有哪些建議?(漏掉的藥物、應加入的風險指標、想看到的功能、不適用的情境)",
+    fbLikert1: "非常不同意",
+    fbLikert2: "不同意",
+    fbLikert3: "普通",
+    fbLikert4: "同意",
+    fbLikert5: "非常同意",
+    fbSubmitLabel: "提交回饋",
+    fbSubmitting: "提交中…",
+    fbSuccess: "謝謝您的回饋!✓",
+    fbErrIncomplete: "請完成基本資料(角色 + 年資 + 專科)與所有 5 題評分(Q1–Q5)",
+    fbErrNetwork: "提交失敗 — 請檢查網路後再試一次",
     evidenceTitle: "文獻證據摘要",
     evExpand: "展開",
     evCvTitle: "急性心血管事件 (BMJ 2023)",
@@ -691,6 +896,34 @@ const I18N = {
     citeIntro: "When mentioning this tool in papers, reports or clinical guidance, please cite using one of the formats below — or download .ris to import into EndNote / Zotero / Mendeley:",
     citeRisLabel: "Download .ris (EndNote / Zotero / Mendeley)",
     citeNote: "When citing specific risk multipliers or scale scores, please also cite the corresponding source studies (see the Evidence summary section).",
+    fbTitle: "Feedback (optional, anonymous)",
+    fbExpand: "Expand",
+    fbFloatBtnLabel: "Send feedback",
+    fbDemogTitle: "About you (for stratified analysis)",
+    fbSurveyTitle: "Your experience",
+    fbDemogRole: "Role",
+    fbDemogYears: "Years in clinical practice",
+    fbDemogSpec: "Specialty / department",
+    fbRoleOpts: ["Physician", "Pharmacist", "Nurse", "Student", "Other"],
+    fbYearsOpts: ["<5 yr", "5–10 yr", "11–20 yr", ">20 yr"],
+    fbSpecOpts: ["Geriatrics", "Family Medicine", "General Internal Med", "Psychiatry", "Neurology", "Emergency Medicine", "Pharmacy", "Nursing", "Other"],
+    fbIntro: 'Your feedback helps improve this tool and inform future research. <b>Submissions are anonymous</b> and contain only your survey responses and minimal usage context (this session\'s ACB score, drug count, browser language, timestamp). No personal identifiers are collected. This study has been reviewed under the NCKU IRB ethics framework; by submitting you consent to use of the above data for tool improvement and future research publication.<br><br><b>Note</b>: this tool is a clinical <b>decision-support</b> aid, not a substitute for physician judgement. Prescribing should still integrate the patient\'s individual context, comorbidities, indications, drug interactions and clinical experience. Please answer the following items from the perspective of using this tool as <b>one reference among several</b>.',
+    fbQ1: "The tool was easy to use and intuitive.",
+    fbQ2: "The tool's output helps me assess the patient's anticholinergic burden.",
+    fbQ3: "The tool's output will be one of the considerations in my prescribing decision for this patient (whether to adjust, reduce dose, discontinue, or substitute).",
+    fbQ4: "I trust the risk estimates produced by this tool to be clinically meaningful.",
+    fbQ5: "I intend to continue using this tool as a reference aid in my clinical practice.",
+    fbQ6: "What suggestions do you have for the tool? (Missing medications, additional risk indicators, desired features, or unfit scenarios.)",
+    fbLikert1: "Strongly disagree",
+    fbLikert2: "Disagree",
+    fbLikert3: "Neutral",
+    fbLikert4: "Agree",
+    fbLikert5: "Strongly agree",
+    fbSubmitLabel: "Submit feedback",
+    fbSubmitting: "Submitting…",
+    fbSuccess: "Thank you for your feedback! ✓",
+    fbErrIncomplete: "Please complete the demographics (role + years + specialty) and all 5 ratings (Q1–Q5)",
+    fbErrNetwork: "Submission failed — please check your connection and try again",
     evidenceTitle: "Evidence summary",
     evExpand: "Expand",
     evCvTitle: "Acute cardiovascular events (BMJ 2023)",
@@ -770,6 +1003,8 @@ function setLang(lang) {
     }
   }
   applyStaticLang();
+  if (typeof _refreshLikertLabels === 'function') _refreshLikertLabels();
+  if (typeof _renderDemographics === 'function') _renderDemographics();
   if (typeof render === 'function') render();
 }
 
@@ -790,6 +1025,12 @@ function applyStaticLang() {
     emptyMsgEl: 'emptyMsg',
     citeTitleEl: 'citeTitle', citeExpandEl: 'citeExpand',
     citeIntroEl: 'citeIntro', citeRisLabel: 'citeRisLabel', citeNoteEl: 'citeNote',
+    fbTitleEl: 'fbTitle', fbExpandEl: 'fbExpand', fbIntroEl: 'fbIntro',
+    fbQ1El: 'fbQ1', fbQ2El: 'fbQ2', fbQ3El: 'fbQ3', fbQ4El: 'fbQ4', fbQ5El: 'fbQ5', fbQ6El: 'fbQ6',
+    fbSubmitLabel: 'fbSubmitLabel',
+    fbFloatBtnLabel: 'fbFloatBtnLabel',
+    fbDemogTitleEl: 'fbDemogTitle', fbSurveyTitleEl: 'fbSurveyTitle',
+    fbDemogRoleEl: 'fbDemogRole', fbDemogYearsEl: 'fbDemogYears', fbDemogSpecEl: 'fbDemogSpec',
     evidenceTitleEl: 'evidenceTitle', evExpandEl: 'evExpand',
     evCvTitleEl: 'evCvTitle', evCvDescEl: 'evCvDesc',
     evCvL1El: 'evCvL1', evCvL2El: 'evCvL2', evCvL3El: 'evCvL3', evCvL4El: 'evCvL4', evCvL5El: 'evCvL5',
@@ -1169,6 +1410,12 @@ function render() {
   $("selectedSection").classList.toggle("hidden", !selected.length);
   $("resultsSection").classList.toggle("hidden", !selected.length);
   $("printBtnWrap").classList.toggle("hidden", !selected.length);
+  // Floating feedback button: show when there's an evaluation to react to
+  const fbFab = $("fbFloatBtn");
+  if (fbFab) {
+    fbFab.classList.toggle("hidden", !selected.length);
+    fbFab.style.display = selected.length ? 'inline-flex' : 'none';
+  }
   $("emptyState").classList.toggle("hidden", !!selected.length);
   // Update print-only date stamp (locale-aware, falls back gracefully)
   if (selected.length) {
@@ -1388,6 +1635,133 @@ function _downloadRIS() {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 window._downloadRIS = _downloadRIS;
+
+// ===== Research-grade feedback survey (Formspree backend) =====
+// IMPORTANT: replace YOUR_FORM_ID with your actual Formspree form ID.
+// Sign up at https://formspree.io → create a form → copy the 8-char hash from
+// the endpoint URL (https://formspree.io/f/abcdwxyz).
+const _FEEDBACK_ENDPOINT = 'https://formspree.io/f/xykvbaqk';
+
+// Render demographic chip groups (role + years). Called on page load + lang change.
+// Stores selected value as data-value on the container so we can rebuild labels
+// when language switches without losing the user's choice.
+function _renderDemographics() {
+  const groups = [
+    { containerId: 'fbDemogRoleOpts', name: 'demog_role', i18nKey: 'fbRoleOpts' },
+    { containerId: 'fbDemogYearsOpts', name: 'demog_years', i18nKey: 'fbYearsOpts' },
+    { containerId: 'fbDemogSpecOpts', name: 'demog_specialty', i18nKey: 'fbSpecOpts' },
+  ];
+  groups.forEach(g => {
+    const c = document.getElementById(g.containerId);
+    if (!c) return;
+    // Preserve previously selected option index across re-renders
+    const prevSelected = c.querySelector('input:checked');
+    const prevIdx = prevSelected ? prevSelected.dataset.idx : null;
+    c.innerHTML = '';
+    const opts = t(g.i18nKey);
+    opts.forEach((label, idx) => {
+      const wrap = document.createElement('label');
+      wrap.className = 'fb-chip';
+      const radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = g.name; radio.value = label;
+      radio.required = true; radio.dataset.idx = String(idx);
+      if (prevIdx === String(idx)) radio.checked = true;
+      const span = document.createElement('span'); span.textContent = label;
+      wrap.appendChild(radio); wrap.appendChild(span);
+      c.appendChild(wrap);
+    });
+  });
+}
+
+// Render the 5 Likert button groups. Called once on page load (Q1–Q5 only).
+function _renderLikertButtons() {
+  document.querySelectorAll('.fb-likert').forEach(group => {
+    if (group.dataset.rendered === '1') return;
+    const qName = group.dataset.q;
+    for (let v = 1; v <= 5; v++) {
+      const label = document.createElement('label');
+      const radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = qName; radio.value = String(v); radio.required = true;
+      const num = document.createElement('span');
+      num.className = 'fb-likert-num'; num.textContent = v;
+      const txt = document.createElement('span');
+      txt.setAttribute('data-likert-anchor', String(v));
+      txt.textContent = t('fbLikert' + v);
+      label.appendChild(radio); label.appendChild(num); label.appendChild(txt);
+      group.appendChild(label);
+    }
+    group.dataset.rendered = '1';
+  });
+}
+
+// Refresh Likert anchor labels when language changes
+function _refreshLikertLabels() {
+  document.querySelectorAll('[data-likert-anchor]').forEach(el => {
+    el.textContent = t('fbLikert' + el.getAttribute('data-likert-anchor'));
+  });
+}
+
+async function _submitFeedback(ev) {
+  ev.preventDefault();
+  const form = ev.target;
+  const statusEl = document.getElementById('fbStatusMsg');
+  const submitBtn = document.getElementById('fbSubmitBtn');
+  const submitLabel = document.getElementById('fbSubmitLabel');
+
+  // Validate: 3 demographics (role + years + specialty) and all 5 Likert questions must be answered
+  const required = ['demog_role', 'demog_years', 'demog_specialty', 'q1', 'q2', 'q3', 'q4', 'q5'];
+  const missing = required.find(q => !form.querySelector(`input[name="${q}"]:checked`));
+  if (missing) {
+    statusEl.textContent = t('fbErrIncomplete');
+    statusEl.style.color = '#dc2626';
+    return false;
+  }
+
+  // Auto-populate hidden context fields with current evaluation state
+  const totEl = document.getElementById('total-ACB');
+  form.elements['ctx_acb_total'].value = totEl ? totEl.textContent : '';
+  form.elements['ctx_drug_count'].value = (typeof selected !== 'undefined') ? selected.length : 0;
+  form.elements['ctx_drug_list'].value = (typeof selected !== 'undefined')
+    ? selected.map(d => d.name).join(' | ') : '';
+  form.elements['ctx_language'].value = LANG;
+  form.elements['ctx_timestamp'].value = new Date().toISOString();
+  form.elements['ctx_user_agent'].value = navigator.userAgent.slice(0, 200);
+
+  // Disable submit + show status
+  submitBtn.disabled = true;
+  submitLabel.textContent = t('fbSubmitting');
+  statusEl.textContent = '';
+
+  try {
+    const formData = new FormData(form);
+    const resp = await fetch(_FEEDBACK_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+      headers: { 'Accept': 'application/json' }
+    });
+    if (resp.ok) {
+      statusEl.textContent = t('fbSuccess');
+      statusEl.style.color = '#16a34a';
+      form.reset();
+      // Hide form after success so user knows we received it
+      setTimeout(() => {
+        const card = document.getElementById('feedbackCard');
+        if (card) card.open = false;
+      }, 2500);
+    } else {
+      throw new Error('HTTP ' + resp.status);
+    }
+  } catch (e) {
+    console.error('Feedback submit failed:', e);
+    statusEl.textContent = t('fbErrNetwork');
+    statusEl.style.color = '#dc2626';
+  } finally {
+    submitBtn.disabled = false;
+    submitLabel.textContent = t('fbSubmitLabel');
+  }
+  return false;
+}
+window._submitFeedback = _submitFeedback;
 
 // Lazy-load chi_tra worker — only invoked when English pass returns 0 drugs.
 // Adds ~3 s on Chinese-only images, free on English images.
@@ -2115,8 +2489,33 @@ document.addEventListener("click", e => {
 
 $("clearAll").addEventListener("click", () => { selected.length = 0; render(); });
 
+_renderLikertButtons();
+_renderDemographics();
 setLang(LANG);
 render();
+
+// Click-outside-to-close for feedback panel:
+// - mobile (backdrop visible): clicking backdrop area (= card root, not inner) closes
+// - desktop (no backdrop, panel on right): clicking the calculator area to the LEFT
+//   of the panel closes it. We listen on document and check if click hit outside .fb-panel-inner.
+document.getElementById('feedbackCard')?.addEventListener('click', (e) => {
+  if (e.target.id === 'feedbackCard') e.currentTarget.classList.add('hidden');
+});
+document.addEventListener('click', (e) => {
+  const fb = document.getElementById('feedbackCard');
+  if (!fb || fb.classList.contains('hidden')) return;
+  // Ignore clicks inside the panel or on the FAB itself
+  if (e.target.closest('.fb-panel-inner')) return;
+  if (e.target.closest('#fbFloatBtn')) return;
+  fb.classList.add('hidden');
+}, true);
+// ESC closes feedback modal
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const fb = document.getElementById('feedbackCard');
+    if (fb && !fb.classList.contains('hidden')) fb.classList.add('hidden');
+  }
+});
 </script>
 </body>
 </html>
