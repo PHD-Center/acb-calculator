@@ -491,6 +491,7 @@
         <input type="hidden" name="ctx_language" value="">
         <input type="hidden" name="ctx_timestamp" value="">
         <input type="hidden" name="ctx_user_agent" value="">
+        <input type="hidden" name="ctx_session_id" value="">
         <!-- Formspree honeypot for spam protection -->
         <input type="text" name="_gotcha" style="display:none">
 
@@ -1637,6 +1638,29 @@ function _downloadRIS() {
 window._downloadRIS = _downloadRIS;
 
 // ===== Research-grade feedback survey (Formspree backend) =====
+// Anonymous session ID — UUID stored in localStorage on first visit, persists
+// across sessions on the same browser. Lets researchers detect repeat submitters
+// without collecting any personally-identifying info. Combined with Formspree's
+// auto-captured IP + ctx_user_agent gives 3-layer dedup for publication-grade
+// analysis (same session_id = same browser; different session_id + same IP/UA
+// = same person across browsers or after clearing storage).
+function _getSessionId() {
+  try {
+    let id = localStorage.getItem('acb-session-id');
+    if (!id) {
+      id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+      localStorage.setItem('acb-session-id', id);
+    }
+    return id;
+  } catch(e) {
+    // Private mode / storage blocked — generate ephemeral ID
+    return 'eph-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+  }
+}
+window._getSessionId = _getSessionId;
+
 // IMPORTANT: replace YOUR_FORM_ID with your actual Formspree form ID.
 // Sign up at https://formspree.io → create a form → copy the 8-char hash from
 // the endpoint URL (https://formspree.io/f/abcdwxyz).
@@ -1726,6 +1750,7 @@ async function _submitFeedback(ev) {
   form.elements['ctx_language'].value = LANG;
   form.elements['ctx_timestamp'].value = new Date().toISOString();
   form.elements['ctx_user_agent'].value = navigator.userAgent.slice(0, 200);
+  form.elements['ctx_session_id'].value = _getSessionId();
 
   // Disable submit + show status
   submitBtn.disabled = true;
