@@ -79,7 +79,7 @@
     margin: 0 auto;
     padding: 0 16px;
     display: flex; align-items: center; justify-content: space-between;
-    height: 64px;
+    height: 54px;
   }
   .top-accent-bar {
     position: absolute; top: 0; left: 0; right: 0; height: 3px;
@@ -96,51 +96,51 @@
     border-radius: 9999px; filter: blur(80px);
   }
   .hero-blur-a {
-    top: -100px; right: -80px;
-    width: 420px; height: 420px;
-    background: linear-gradient(135deg, rgba(69,133,87,0.18), rgba(61,115,106,0.12), transparent);
+    top: -60px; right: -60px;
+    width: 240px; height: 240px;
+    background: linear-gradient(135deg, rgba(69,133,87,0.12), rgba(61,115,106,0.08), transparent);
   }
   .hero-blur-b {
-    bottom: -140px; left: -80px;
-    width: 360px; height: 360px;
-    background: linear-gradient(45deg, rgba(61,115,106,0.12), transparent);
+    bottom: -80px; left: -40px;
+    width: 200px; height: 200px;
+    background: linear-gradient(45deg, rgba(61,115,106,0.08), transparent);
   }
   .hero-inner {
     position: relative;
     max-width: 72rem;
     margin: 0 auto;
-    padding: 56px 16px 48px;
+    padding: 24px 16px 28px;
   }
   .hero-headline {
-    font-size: clamp(2rem, 4.8vw, 3.4rem);
+    font-size: clamp(1.75rem, 4.2vw, 2.6rem);
     font-weight: 700;
-    line-height: 1.08;
+    line-height: 1.1;
     color: #0f172a;
     letter-spacing: -0.025em;
-    margin: 12px 0 0;
+    margin: 8px 0 0;
   }
   .hero-headline em {
     font-style: normal;
     color: var(--brand-600);
   }
   .hero-subtitle {
-    margin-top: 18px;
-    max-width: 38rem;
-    font-size: 15.5px;
+    margin-top: 12px;
+    max-width: 44rem;
+    font-size: 13.5px;
     color: #475569;
-    line-height: 1.7;
+    line-height: 1.6;
   }
 
   /* Main content container — match AsPEN max-w-6xl rhythm */
   .main-container {
     max-width: 72rem;
     margin: 0 auto;
-    padding: 28px 16px;
+    padding: 20px 16px;
   }
   @media (min-width: 640px) {
     .site-header-inner { padding: 0 24px; }
-    .hero-inner { padding: 72px 24px 56px; }
-    .main-container { padding: 36px 24px; }
+    .hero-inner { padding: 32px 24px 36px; }
+    .main-container { padding: 28px 24px; }
   }
   @media (min-width: 1024px) {
     .site-header-inner, .hero-inner, .main-container { padding-left: 32px; padding-right: 32px; }
@@ -351,9 +351,9 @@
 <!-- Sticky translucent header -->
 <header class="site-header">
   <div class="site-header-inner">
-    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;">
-      <img src="phdc-logo.png" alt="" onerror="this.style.display='none';" style="height:32px;width:auto;flex-shrink:0;">
-      <span id="hdrBrandName" class="hidden lg:inline" style="font-size:13px;font-weight:700;color:var(--brand-700);line-height:1.1;white-space:nowrap;">抗膽鹼藥物負擔計算器</span>
+    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="text-decoration:none;color:inherit;display:inline-flex;flex-direction:column;justify-content:center;gap:1px;line-height:1.1;">
+      <span id="hdrBrandName" style="font-size:14px;font-weight:700;color:var(--brand-700);white-space:nowrap;">抗膽鹼藥物負擔計算器</span>
+      <span id="hdrBrandSub" style="font-size:10.5px;color:#64748b;letter-spacing:0.02em;white-space:nowrap;">Anticholinergic Burden Calculator</span>
     </a>
     <div class="flex bg-white rounded-lg border border-slate-200 shadow-sm flex-shrink-0 text-xs">
       <button type="button" id="langZh" onclick="setLang('zh')" class="px-3 py-1.5 rounded-l-lg transition" style="background:#2e5a52;color:#fff;">中文</button>
