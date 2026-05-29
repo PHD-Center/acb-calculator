@@ -351,9 +351,9 @@
 <!-- Sticky translucent header -->
 <header class="site-header">
   <div class="site-header-inner">
-    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="text-decoration:none;color:inherit;display:inline-flex;flex-direction:column;justify-content:center;gap:1px;line-height:1.1;">
-      <span id="hdrBrandName" style="font-size:14px;font-weight:700;color:var(--brand-700);white-space:nowrap;">抗膽鹼藥物負擔計算器</span>
-      <span id="hdrBrandSub" style="font-size:10.5px;color:#64748b;letter-spacing:0.02em;white-space:nowrap;">Anticholinergic Burden Calculator</span>
+    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:8px;">
+      <span aria-hidden="true" style="display:inline-block;width:5px;height:5px;border-radius:9999px;background:var(--brand-600);flex-shrink:0;"></span>
+      <span id="hdrBrandName" style="font-size:14.5px;font-weight:700;color:var(--brand-700);white-space:nowrap;letter-spacing:-0.005em;">抗膽鹼藥物負擔計算器</span>
     </a>
     <div class="flex bg-white rounded-lg border border-slate-200 shadow-sm flex-shrink-0 text-xs">
       <button type="button" id="langZh" onclick="setLang('zh')" class="px-3 py-1.5 rounded-l-lg transition" style="background:#2e5a52;color:#fff;">中文</button>
@@ -786,6 +786,7 @@ let LANG = (function(){ try { return localStorage.getItem('acb-lang') || 'zh'; }
 const I18N = {
   zh: {
     title: "抗膽鹼藥物負擔<em>計算器</em>",
+    brandName: "抗膽鹼藥物負擔計算器",
     subtitle: "Anticholinergic Burden Calculator · 6 種評分量表整合分析",
     population: '本工具計算結果以 <b>≥65 歲老年族群</b>之研究為依據;本系列研究使用 case-crossover 等設計方法,可探討短時間內暴露變化與急性事件的相關性',
     disclaimer: "Note: 本工具僅供醫療人員參考。",
@@ -959,6 +960,7 @@ const I18N = {
   },
   en: {
     title: "Anticholinergic Burden <em>Calculator</em>",
+    brandName: "Anticholinergic Burden Calculator",
     subtitle: "Anticholinergic Burden Calculator · Integrated 6-scale analysis",
     population: 'Risk estimates apply to <b>adults aged ≥65 years</b> based on the underlying evidence. The source studies use case-crossover and related designs, well suited to evaluating short-term exposure changes and acute events.',
     disclaimer: "Note: For healthcare professional reference only.",
@@ -1157,7 +1159,7 @@ function setLang(lang) {
 
 function applyStaticLang() {
   const map = {
-    hdrTitle: 'title', hdrSub: 'subtitle', hdrPopulation: 'population',
+    hdrTitle: 'title', hdrSub: 'subtitle', hdrPopulation: 'population', hdrBrandName: 'brandName',
     inputLabelEl: 'inputLabel', inputEyebrow: 'inputEyebrow', drugInput: { attr: 'placeholder', key: 'placeholder' },
     addBtnEl: 'addBtn', inputHintEl: 'inputHint',
     ocrBtnLabel: 'ocrBtn', ocrHintEl: 'ocrHint',
