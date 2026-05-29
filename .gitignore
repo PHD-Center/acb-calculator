@@ -2,8 +2,9 @@
 # the public GitHub Pages repo (phd-center/acb-calculator).
 *
 
-# Allow the production app + docs + logo + this ignore file
+# Allow the production app + docs + logos + this ignore file
 !index.html
 !README.md
 !phdc-logo.png
+!PHD_LOGO+abv.Eng.NAME_v1.png
 !.gitignore
