@@ -351,26 +351,23 @@
 <!-- Sticky translucent header -->
 <header class="site-header">
   <div class="site-header-inner">
-    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:10px;" aria-label="PHDc Data Infrastructure Working Group">
-      <!-- PHDc-DI WG logo: PHDc peak + measurement bars + AsPEN network nodes -->
-      <svg aria-hidden="true" width="30" height="30" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
-        <!-- Subtle peak shadow -->
-        <path d="M20 6 L34.5 30.5 L5.5 30.5 Z" fill="#ebf3f0"/>
-        <!-- Triangle outline (PHDc reference — measurement triangle) -->
-        <path d="M20 6 L34.5 30.5 L5.5 30.5 Z" fill="none" stroke="#2e5a52" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        <!-- Ascending data bars inside (Data Infrastructure motif) -->
-        <rect x="12" y="24"   width="2.4" height="4"  fill="#3d736a" rx="0.4"/>
-        <rect x="16" y="21"   width="2.4" height="7"  fill="#3d736a" rx="0.4"/>
-        <rect x="20" y="18"   width="2.4" height="10" fill="#3d736a" rx="0.4"/>
-        <rect x="24" y="15"   width="2.4" height="13" fill="#3d736a" rx="0.4"/>
-        <!-- Network nodes at vertices (AsPEN multi-site network reference) -->
-        <circle cx="20"  cy="6"    r="2.6" fill="#458557" stroke="#fff" stroke-width="0.9"/>
-        <circle cx="34.5" cy="30.5" r="2.6" fill="#458557" stroke="#fff" stroke-width="0.9"/>
-        <circle cx="5.5"  cy="30.5" r="2.6" fill="#458557" stroke="#fff" stroke-width="0.9"/>
+    <a href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:12px;" aria-label="PHDc Data Infrastructure Working Group">
+      <!-- PHDc-DI monogram — Bauhaus geometric P, single tone, editorial restraint -->
+      <svg aria-hidden="true" width="22" height="30" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;display:block;">
+        <g fill="#21443e">
+          <!-- Vertical stem -->
+          <rect x="0"  y="0"  width="6"  height="38"/>
+          <!-- Top crossbar of bowl -->
+          <rect x="0"  y="0"  width="22" height="5"/>
+          <!-- Right side of bowl -->
+          <rect x="22" y="0"  width="6"  height="22"/>
+          <!-- Bottom crossbar of bowl -->
+          <rect x="0"  y="17" width="22" height="5"/>
+        </g>
       </svg>
-      <span style="display:inline-flex;flex-direction:column;line-height:1.05;gap:1px;">
-        <span id="hdrBrandName" style="font-size:14px;font-weight:700;color:var(--brand-700);white-space:nowrap;letter-spacing:-0.005em;">抗膽鹼藥物負擔計算器</span>
-        <span style="font-size:9.5px;font-weight:600;color:var(--brand-500);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;">PHDc · Data Infrastructure WG</span>
+      <span style="display:inline-flex;flex-direction:column;line-height:1.02;gap:3px;border-left:1px solid #cbd5e1;padding-left:12px;">
+        <span style="font-size:9px;font-weight:600;color:var(--brand-500);letter-spacing:0.15em;text-transform:uppercase;white-space:nowrap;">PHDc — Data Infrastructure WG</span>
+        <span id="hdrBrandName" style="font-size:14.5px;font-weight:700;color:var(--brand-700);white-space:nowrap;letter-spacing:-0.01em;">抗膽鹼藥物負擔計算器</span>
       </span>
     </a>
     <div class="flex bg-white rounded-lg border border-slate-200 shadow-sm flex-shrink-0 text-xs">
