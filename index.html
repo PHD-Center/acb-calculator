@@ -464,6 +464,9 @@
       <p id="voiceStatus" class="text-base font-semibold text-slate-800">聽取中…請說藥名</p>
       <p id="voiceTranscript" class="text-sm text-slate-500 mt-3" style="min-height:1.5em;"></p>
       <button type="button" onclick="_stopVoiceInput()" id="voiceCancelBtn" class="mt-4 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
+      <div class="mt-3 pt-3 border-t border-slate-100">
+        <button type="button" onclick="_promptGeminiKey()" id="voiceAiStatus" class="text-xs hover:underline" style="color:#64748b;background:none;border:0;cursor:pointer;">+ 加設 Gemini 金鑰開啟 AI 輔助辨識</button>
+      </div>
     </div>
   </div>
 
@@ -1922,6 +1925,7 @@ function _startVoiceInput() {
   modal.classList.remove('hidden');
   transcript.textContent = '';
   status.textContent = t('voiceListening');
+  _updateAiStatusLabel();
 
   let processed = false;
   let endedCount = 0;
@@ -2073,7 +2077,7 @@ function _voiceMatchDrugs(transcript) {
   return [...matches.values()].sort((a, b) => b.score - a.score);
 }
 
-function _processVoiceCandidates(candidates) {
+async function _processVoiceCandidates(candidates) {
   // Path 1: try each transcript through the character-based fuzzy matcher.
   // Voice has no dose context → use the clean-token / exact-match path:
   // generic drugs with score ≥100, source-driven by passTop.
@@ -2122,6 +2126,21 @@ function _processVoiceCandidates(candidates) {
       }
     }
   }
+  // Path 3: Gemini AI-assisted matching — only fires if both prior paths failed
+  // AND user has configured an API key. Tries up to top-2 transcripts.
+  if (added === 0 && _getGeminiKey()) {
+    const status = document.getElementById('voiceStatus');
+    if (status) status.textContent = (LANG === 'zh' ? '🤖 AI 輔助辨識中…' : '🤖 AI matching…');
+    for (const transcript of candidates.slice(0, 2)) {
+      try {
+        const drug = await _geminiMatchDrug(transcript);
+        if (drug && !selected.find(d => d.atc === drug.atc && d.name === drug.name)) {
+          selected.push(drug); added++; addedNames.push(drug.name);
+          break;
+        }
+      } catch(e) { /* ignore single-call failure, try next transcript */ }
+    }
+  }
   _stopVoiceInput();
   if (added > 0) {
     render();
@@ -2136,6 +2155,90 @@ function _processVoiceCandidates(candidates) {
 }
 window._startVoiceInput = _startVoiceInput;
 window._stopVoiceInput = _stopVoiceInput;
+
+// ===== Gemini AI-assisted voice matching (Path 3) =====
+// Pure phonetic can't catch totally-divergent STT errors like "play topic"
+// → Quetiapine. LLMs handle this via context reasoning. Free tier of Gemini
+// 1.5 Flash (60 req/min) is generous enough for clinical use. Key is stored
+// locally per browser; never transmitted to our servers.
+function _getGeminiKey() {
+  try { return localStorage.getItem('acb-gemini-key') || ''; } catch(e) { return ''; }
+}
+function _setGeminiKey(k) {
+  try {
+    if (k && k.trim()) localStorage.setItem('acb-gemini-key', k.trim());
+    else localStorage.removeItem('acb-gemini-key');
+  } catch(e) {}
+  _updateAiStatusLabel();
+}
+function _promptGeminiKey() {
+  const current = _getGeminiKey();
+  const url = 'https://aistudio.google.com/app/apikey';
+  const msg = (LANG === 'zh'
+    ? `請貼上 Google Gemini API 金鑰\n(免費,在 ${url} 取得)\n\n• 金鑰只存在你這台瀏覽器的 localStorage\n• 每次語音辨識時送出 transcript + 藥物清單給 Google\n• 留空可清除已存金鑰`
+    : `Paste your Google Gemini API key\n(free, get one at ${url})\n\n• Key is stored only in your browser's localStorage\n• Each voice query sends transcript + drug list to Google\n• Leave blank to clear the saved key`);
+  const k = prompt(msg, current);
+  if (k !== null) _setGeminiKey(k);
+}
+function _updateAiStatusLabel() {
+  const el = document.getElementById('voiceAiStatus');
+  if (!el) return;
+  const hasKey = !!_getGeminiKey();
+  el.textContent = hasKey
+    ? (LANG === 'zh' ? '✓ AI 加強辨識已啟用(點此管理)' : '✓ AI-assisted matching on (click to manage)')
+    : (LANG === 'zh' ? '+ 加設 Gemini 金鑰開啟 AI 輔助辨識' : '+ Add a Gemini key to enable AI-assisted matching');
+  el.style.color = hasKey ? 'var(--brand-600)' : '#64748b';
+}
+window._promptGeminiKey = _promptGeminiKey;
+window._updateAiStatusLabel = _updateAiStatusLabel;
+
+async function _geminiMatchDrug(transcript) {
+  const key = _getGeminiKey();
+  if (!key) return null;
+  const drugList = DRUGS.map(d => d.name).join('\n');
+  const promptText = `You are helping a Taiwan-based clinician use an anticholinergic-burden calculator. They just dictated a drug name; speech-to-text may have misheard it. The transcript is:
+
+"${transcript}"
+
+Below is the complete list of 122 drug generic names in the database. Determine which single drug they most likely intended. Consider:
+- Phonetic similarity (e.g. "play topic" sounds like "Quetiapine" because of "k-T-pic" / "Que-tia-pine")
+- Common STT errors with medical/chemical names
+- Chinese-English mixed pronunciations (Taiwan clinicians)
+- If transcript is clearly not a drug name (small talk, random words), reply with "null"
+
+REPLY FORMAT: exact drug name from the list (verbatim), OR the literal word null. No quotes, no explanation.
+
+DRUG LIST:
+${drugList}
+
+INTENDED DRUG:`;
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 40 }
+      })
+    });
+    if (!resp.ok) {
+      console.warn('Gemini HTTP error:', resp.status);
+      return null;
+    }
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    if (!raw || raw.toLowerCase() === 'null') return null;
+    // Strip quotes/punctuation Gemini might add despite the instruction
+    const cleaned = raw.replace(/^["'`]+|["'`.,;:]+$/g, '').trim();
+    return DRUGS.find(d => d.name === cleaned)
+        || DRUGS.find(d => d.name.toLowerCase() === cleaned.toLowerCase())
+        || null;
+  } catch(e) {
+    console.warn('Gemini call failed:', e);
+    return null;
+  }
+}
+window._geminiMatchDrug = _geminiMatchDrug;
 
 // Dismiss inline feedback nudge for the rest of this session (sessionStorage,
 // not localStorage — so opening a fresh browser session re-offers feedback)
