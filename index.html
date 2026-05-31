@@ -515,11 +515,15 @@
     </div>
   </div>
 
-  <!-- Print / Export button (hidden on print itself) -->
-  <div id="printBtnWrap" class="hidden mb-3" style="text-align:right;">
+  <!-- Print / Export + feedback entry (hidden on print itself) -->
+  <div id="printBtnWrap" class="hidden mb-3" style="text-align:right;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
     <button type="button" id="printBtn" onclick="window.print()"
             class="inline-flex items-center gap-1.5 px-3 py-2 border border-indigo-300 bg-indigo-50 text-indigo-800 rounded-lg text-xs font-medium hover:bg-indigo-100 transition no-print">
       <span>🖨️</span> <span id="printBtnLabel">列印 / 匯出 PDF</span>
+    </button>
+    <button type="button" id="fbOpenBtn" onclick="document.getElementById('feedbackCard').classList.remove('hidden');"
+            class="inline-flex items-center gap-1.5 px-3 py-2 border border-slate-300 bg-white text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-50 transition no-print">
+      <span>📝</span> <span id="fbOpenBtnLabel">給我們回饋</span>
     </button>
   </div>
 
@@ -781,12 +785,11 @@
     <p id="emptyMsgEl" class="text-slate-500">輸入病人目前用藥開始計算抗膽鹼負擔</p>
   </section>
 
-  <!-- Floating feedback FAB — shows when there's an evaluation to react to -->
-  <button type="button" id="fbFloatBtn" class="hidden no-print"
+  <!-- Floating feedback FAB removed — was too pushy on mobile. Feedback entry
+       moved next to the print/PDF button (see #fbOpenBtn). -->
+  <button type="button" id="fbFloatBtn" class="hidden no-print" style="display:none !important;"
           onclick="document.getElementById('feedbackCard').classList.remove('hidden');"
-          style="position:fixed;bottom:24px;right:24px;z-index:40;display:none;align-items:center;gap:8px;padding:14px 20px;background:#2e5a52;color:#fff;border:0;border-radius:9999px;font-weight:600;font-size:14px;box-shadow:0 10px 25px rgba(46,90,82,0.45),0 4px 10px rgba(0,0,0,0.15);cursor:pointer;transition:transform .15s,box-shadow .15s;"
-          onmouseover="this.style.transform='scale(1.05)';this.style.boxShadow='0 14px 32px rgba(46,90,82,0.55),0 6px 14px rgba(0,0,0,0.2)';"
-          onmouseout="this.style.transform='';this.style.boxShadow='0 10px 25px rgba(46,90,82,0.45),0 4px 10px rgba(0,0,0,0.15)';">
+          aria-hidden="true">
     <span style="font-size:18px;">📝</span> <span id="fbFloatBtnLabel">給我們回饋</span>
   </button>
 
@@ -1217,7 +1220,7 @@ function applyStaticLang() {
     fbTitleEl: 'fbTitle', fbExpandEl: 'fbExpand', fbIntroEl: 'fbIntro',
     fbQ1El: 'fbQ1', fbQ2El: 'fbQ2', fbQ3El: 'fbQ3', fbQ4El: 'fbQ4', fbQ5El: 'fbQ5', fbQ6El: 'fbQ6',
     fbSubmitLabel: 'fbSubmitLabel',
-    fbFloatBtnLabel: 'fbFloatBtnLabel',
+    fbFloatBtnLabel: 'fbFloatBtnLabel', fbOpenBtnLabel: 'fbFloatBtnLabel',
     fbDemogTitleEl: 'fbDemogTitle', fbSurveyTitleEl: 'fbSurveyTitle',
     fbDemogRoleEl: 'fbDemogRole', fbDemogYearsEl: 'fbDemogYears', fbDemogSpecEl: 'fbDemogSpec',
     evidenceTitleEl: 'evidenceTitle', evExpandEl: 'evExpand',
@@ -1599,12 +1602,9 @@ function render() {
   $("selectedSection").classList.toggle("hidden", !selected.length);
   $("resultsSection").classList.toggle("hidden", !selected.length);
   $("printBtnWrap").classList.toggle("hidden", !selected.length);
-  // Floating feedback button: show when there's an evaluation to react to
-  const fbFab = $("fbFloatBtn");
-  if (fbFab) {
-    fbFab.classList.toggle("hidden", !selected.length);
-    fbFab.style.display = selected.length ? 'inline-flex' : 'none';
-  }
+  // Floating FAB removed (user feedback: pushy on mobile).
+  // Feedback entry now lives next to the print button (#fbOpenBtn) and is
+  // shown/hidden together with the print row via #printBtnWrap toggling above.
   $("emptyState").classList.toggle("hidden", !!selected.length);
   // Update print-only date stamp (locale-aware, falls back gracefully)
   if (selected.length) {
@@ -2848,7 +2848,7 @@ document.addEventListener('click', (e) => {
   if (!fb || fb.classList.contains('hidden')) return;
   // Ignore clicks inside the panel or on the FAB itself
   if (e.target.closest('.fb-panel-inner')) return;
-  if (e.target.closest('#fbFloatBtn')) return;
+  if (e.target.closest('#fbFloatBtn') || e.target.closest('#fbOpenBtn')) return;
   fb.classList.add('hidden');
 }, true);
 // ESC closes feedback modal
