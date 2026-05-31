@@ -460,12 +460,25 @@
   <!-- Voice input status modal (Web Speech API) -->
   <div id="voiceModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 no-print" style="background:rgba(15,23,42,0.5);">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center">
-      <div class="text-5xl mb-3 voice-pulse" aria-hidden="true">🎤</div>
-      <p id="voiceStatus" class="text-base font-semibold text-slate-800">聽取中…請說藥名</p>
-      <p id="voiceTranscript" class="text-sm text-slate-500 mt-3" style="min-height:1.5em;"></p>
-      <button type="button" onclick="_stopVoiceInput()" id="voiceCancelBtn" class="mt-4 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
-      <div class="mt-3 pt-3 border-t border-slate-100">
-        <button type="button" onclick="_promptGeminiKey()" id="voiceAiStatus" class="text-xs hover:underline" style="color:#64748b;background:none;border:0;cursor:pointer;">+ 加設 Gemini 金鑰開啟 AI 輔助辨識</button>
+      <!-- State 1: Listening (default) -->
+      <div id="voiceListening">
+        <div class="text-5xl mb-3 voice-pulse" aria-hidden="true">🎤</div>
+        <p id="voiceStatus" class="text-base font-semibold text-slate-800">聽取中…請說藥名</p>
+        <p id="voiceTranscript" class="text-sm text-slate-500 mt-3" style="min-height:1.5em;"></p>
+        <button type="button" onclick="_stopVoiceInput()" class="mt-4 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
+      </div>
+      <!-- State 2: Picker (shown when STT result is ambiguous — user confirms) -->
+      <div id="voicePicker" style="display:none;text-align:left;">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-2xl">🎤</span>
+          <p id="voicePickerTitle" class="text-base font-semibold text-slate-800">您要找的是?</p>
+        </div>
+        <p id="voicePickerHeard" class="text-xs text-slate-500 mb-3" style="word-break:break-word;"></p>
+        <div id="voicePickerList" class="space-y-2 max-h-[50vh] overflow-y-auto"></div>
+        <div class="flex gap-2 mt-4">
+          <button type="button" onclick="_voicePickerNone()" class="flex-1 px-4 py-2 text-sm border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition" id="voicePickerNoneBtn">都不是 · 手動輸入</button>
+          <button type="button" onclick="_stopVoiceInput()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1925,7 +1938,11 @@ function _startVoiceInput() {
   modal.classList.remove('hidden');
   transcript.textContent = '';
   status.textContent = t('voiceListening');
-  _updateAiStatusLabel();
+  // Reset to listening state (picker UI may have been left visible from prior session)
+  const listeningEl = document.getElementById('voiceListening');
+  const pickerEl = document.getElementById('voicePicker');
+  if (listeningEl) listeningEl.style.display = 'block';
+  if (pickerEl) pickerEl.style.display = 'none';
 
   let processed = false;
   let endedCount = 0;
@@ -2046,20 +2063,39 @@ function _voiceMatchDrugs(transcript) {
   const idx = _buildDrugPhoneticIndex();
   const cleanText = String(transcript || '').toLowerCase().replace(/[^a-z\s]/g, '');
   const words = cleanText.split(/\s+/).filter(w => w.length >= 2);
-  // Candidates: full mashed transcript, each word, each adjacent bigram
   const cands = [cleanText.replace(/\s+/g, '')].concat(words);
   for (let i = 0; i < words.length - 1; i++) cands.push(words[i] + words[i+1]);
   const matches = new Map();
   for (const cand of cands) {
     const candKey = _phoneticKey(cand);
-    if (candKey.length < 3) continue;
+    if (candKey.length < 2) continue;
     for (const entry of idx) {
       let score = 0;
       const distFull = _lev(candKey, entry.key);
       const minLen = Math.min(candKey.length, entry.key.length);
+      const maxLen = Math.max(candKey.length, entry.key.length);
+      // Tight matches first
       if (distFull === 0 && minLen >= 3) score = 100;
       else if (distFull === 1 && minLen >= 3) score = 90;
       else if (distFull === 2 && minLen >= 5) score = 75;
+      // Looser matches surface as weak candidates (for picker display)
+      else if (distFull === 2 && minLen >= 3) score = 55;
+      else if (distFull === 3 && minLen >= 5) score = 45;
+      // Substring overlap (one phonetic key contains the other) — common for
+      // brand-name aliases or partial STT
+      else if (candKey.length >= 3 && entry.key.length >= 3) {
+        if (entry.key.includes(candKey) || candKey.includes(entry.key)) {
+          const overlapLen = Math.min(candKey.length, entry.key.length);
+          score = Math.max(score, 40 + overlapLen * 3);
+        }
+        // Any 2+ consecutive consonants shared (very loose — for picker only)
+        for (let len = 3; len >= 2 && score === 0; len--) {
+          for (let i = 0; i <= candKey.length - len; i++) {
+            const sub = candKey.slice(i, i + len);
+            if (entry.key.includes(sub)) { score = 25 + len * 5; break; }
+          }
+        }
+      }
       // First-word fallback for multi-word drug names (e.g. "Cough Mixture")
       if (entry.firstWordKey) {
         const fwDist = _lev(candKey, entry.firstWordKey);
@@ -2077,168 +2113,146 @@ function _voiceMatchDrugs(transcript) {
   return [...matches.values()].sort((a, b) => b.score - a.score);
 }
 
-async function _processVoiceCandidates(candidates) {
-  // Path 1: try each transcript through the character-based fuzzy matcher.
-  // Voice has no dose context → use the clean-token / exact-match path:
-  // generic drugs with score ≥100, source-driven by passTop.
+function _processVoiceCandidates(candidates) {
+  // Local-only matching — no external API. Collect drug candidates from BOTH
+  // the character-based fuzzy matcher and the phonetic matcher across ALL
+  // transcripts. Merge by drug, keeping each drug's best score across paths.
+  // If the top scorer is high-confidence exact, auto-add. Otherwise present
+  // a "did you mean?" picker with the top candidates so the user confirms.
   const drugInput = document.getElementById('drugInput');
-  let added = 0;
-  const addedNames = [];
+  const scoreByAtc = new Map();    // atc → { drug, score, source, kind }
+
+  const note = (drug, score, source, kind) => {
+    const existing = scoreByAtc.get(drug.atc);
+    if (!existing || score > existing.score) {
+      scoreByAtc.set(drug.atc, { drug, score, source, kind });
+    }
+  };
+
+  // Path 1: character-based fuzzy on each transcript
   for (const transcript of candidates) {
     const cands = _fuzzyMatchOCR(transcript);
     const top = window._lastSrcTop || new Map();
-    const passTop = (c) => {
+    for (const c of cands) {
+      if (c.kind !== 'generic') continue;
       const tx = top.get(c.source);
-      return !!(tx && tx.atc === c.drug.atc && tx.name === c.drug.name);
-    };
-    const matches = cands.filter(c => c.kind === 'generic' && c.score >= 100 && passTop(c));
-    if (matches.length) {
-      const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
-      const finalMatches = matches.filter(c => {
-        const cn = norm(c.drug.name);
-        return !matches.some(o => o !== c && norm(o.drug.name).length > cn.length && norm(o.drug.name).includes(cn));
-      });
-      for (const c of finalMatches) {
-        if (!selected.find(d => d.atc === c.drug.atc && d.name === c.drug.name)) {
-          selected.push(c.drug); added++; addedNames.push(c.drug.name);
-        }
-      }
-      if (added > 0) break;
+      if (!tx || tx.atc !== c.drug.atc || tx.name !== c.drug.name) continue;
+      note(c.drug, c.score, transcript, 'char');
     }
   }
-  // Path 2: PHONETIC fallback. If char-based path missed everything (common
-  // when STT spells the drug very differently — "quit typing" → "Quetiapine"),
-  // try matching by phonetic key (consonant skeleton after vowel removal).
-  if (added === 0) {
-    const phBest = new Map();
-    for (const transcript of candidates) {
-      const phMatches = _voiceMatchDrugs(transcript);
-      for (const m of phMatches) {
-        const existing = phBest.get(m.drug.atc);
-        if (!existing || m.score > existing.score) phBest.set(m.drug.atc, m);
-      }
-    }
-    const phHits = [...phBest.values()].filter(m => m.score >= 90)
-                    .sort((a, b) => b.score - a.score);
-    for (const m of phHits) {
-      if (!selected.find(d => d.atc === m.drug.atc && d.name === m.drug.name)) {
-        selected.push(m.drug); added++; addedNames.push(m.drug.name);
-      }
-    }
+  // Path 2: phonetic matching on each transcript
+  for (const transcript of candidates) {
+    const phMatches = _voiceMatchDrugs(transcript);
+    for (const m of phMatches) note(m.drug, m.score, transcript, 'phonetic');
   }
-  // Path 3: Gemini AI-assisted matching — only fires if both prior paths failed
-  // AND user has configured an API key. Tries up to top-2 transcripts.
-  if (added === 0 && _getGeminiKey()) {
-    const status = document.getElementById('voiceStatus');
-    if (status) status.textContent = (LANG === 'zh' ? '🤖 AI 輔助辨識中…' : '🤖 AI matching…');
-    for (const transcript of candidates.slice(0, 2)) {
-      try {
-        const drug = await _geminiMatchDrug(transcript);
-        if (drug && !selected.find(d => d.atc === drug.atc && d.name === drug.name)) {
-          selected.push(drug); added++; addedNames.push(drug.name);
-          break;
-        }
-      } catch(e) { /* ignore single-call failure, try next transcript */ }
+
+  // Substring suppression: prefer Methylprednisolone over Prednisolone when
+  // both surface from the same source
+  const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+  let ranked = [...scoreByAtc.values()].sort((a, b) => b.score - a.score);
+  ranked = ranked.filter(c => {
+    const cn = norm(c.drug.name);
+    if (cn.length < 5) return true;
+    return !ranked.some(o => o !== c &&
+      o.source === c.source &&
+      norm(o.drug.name).length > cn.length &&
+      norm(o.drug.name).includes(cn));
+  });
+
+  // Auto-add only when the top scorer is very confident (≥100 = exact match)
+  // AND has a clear lead over the second candidate (>10 points). Otherwise
+  // show the picker to let the user confirm.
+  const top1 = ranked[0];
+  const top2 = ranked[1];
+  const confident = top1 && top1.score >= 100 && (!top2 || (top1.score - top2.score) >= 10);
+
+  if (confident) {
+    if (!selected.find(d => d.atc === top1.drug.atc && d.name === top1.drug.name)) {
+      selected.push(top1.drug);
+      render();
+      drugInput.value = '';
+      _showToast((LANG === 'zh' ? '已加入:' : 'Added: ') + top1.drug.name);
     }
+    _stopVoiceInput();
+    return;
   }
-  _stopVoiceInput();
-  if (added > 0) {
-    render();
-    drugInput.value = '';
-    _showToast((LANG === 'zh' ? '已加入 ' : 'Added ') + added + (LANG === 'zh' ? ' 個藥物:' : ' drug(s): ') + addedNames.join('、'));
+
+  // Ambiguous — show picker with top 5 candidates so user confirms
+  const topN = ranked.slice(0, 5);
+  if (topN.length > 0) {
+    _showVoicePicker(topN, candidates);
   } else {
-    // Still no hit — drop top transcript into the search box for manual confirm
+    // Nothing matched at all — drop transcript into search box for manual
+    _stopVoiceInput();
     drugInput.value = candidates[0] || '';
     if (typeof runSearch === 'function') runSearch();
     _showToast(t('voiceHeard') + ': ' + (candidates[0] || ''));
   }
 }
+
+// Display the "did you mean?" picker inside the voice modal — replaces the
+// listening UI with a selectable list of likely drugs.
+function _showVoicePicker(ranked, transcripts) {
+  const listeningEl = document.getElementById('voiceListening');
+  const pickerEl = document.getElementById('voicePicker');
+  const listEl = document.getElementById('voicePickerList');
+  const heardEl = document.getElementById('voicePickerHeard');
+  if (!pickerEl || !listEl) return;
+  // Show ALL transcript variations so user knows what STT heard
+  const uniqHeard = [...new Set(transcripts.filter(Boolean))].slice(0, 4);
+  heardEl.textContent = (LANG === 'zh' ? '辨識到:' : 'Heard: ') + uniqHeard.join(' / ');
+  // Build clickable list
+  window._voicePickerData = ranked;
+  listEl.innerHTML = ranked.map((m, i) => {
+    const scoreLabel = m.score >= 100 ? '✓' : m.score >= 90 ? '★' : m.score >= 75 ? '·' : '';
+    return `
+      <button type="button" onclick="_voicePickerSelect(${i})"
+              class="w-full text-left px-3 py-2 border border-slate-200 rounded-lg hover:border-brand-500 hover:bg-brand-50 transition"
+              style="display:block;cursor:pointer;background:#fff;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <div class="text-sm font-medium text-slate-900">${m.drug.name}</div>
+            <div class="text-xs text-slate-500" style="margin-top:2px;">ACB ${m.drug.ACB ?? '–'} · ${m.source}</div>
+          </div>
+          <span class="text-xs" style="color:var(--brand-600);font-weight:600;">${scoreLabel}</span>
+        </div>
+      </button>`;
+  }).join('');
+  listeningEl.style.display = 'none';
+  pickerEl.style.display = 'block';
+}
+
+function _voicePickerSelect(i) {
+  const pick = window._voicePickerData?.[i];
+  if (!pick) { _stopVoiceInput(); return; }
+  if (!selected.find(d => d.atc === pick.drug.atc && d.name === pick.drug.name)) {
+    selected.push(pick.drug);
+    render();
+    document.getElementById('drugInput').value = '';
+    _showToast((LANG === 'zh' ? '已加入:' : 'Added: ') + pick.drug.name);
+  }
+  _stopVoiceInput();
+}
+
+function _voicePickerNone() {
+  const drugInput = document.getElementById('drugInput');
+  // Use top transcript as a starting point in the search box so user can edit
+  const transcript = document.getElementById('voicePickerHeard')?.textContent
+                     .replace(/^(辨識到:|Heard: )/, '').split(' / ')[0] || '';
+  _stopVoiceInput();
+  drugInput.value = transcript;
+  if (typeof runSearch === 'function') runSearch();
+  drugInput.focus();
+}
+
+window._voicePickerSelect = _voicePickerSelect;
+window._voicePickerNone = _voicePickerNone;
 window._startVoiceInput = _startVoiceInput;
 window._stopVoiceInput = _stopVoiceInput;
 
-// ===== Gemini AI-assisted voice matching (Path 3) =====
-// Pure phonetic can't catch totally-divergent STT errors like "play topic"
-// → Quetiapine. LLMs handle this via context reasoning. Free tier of Gemini
-// 1.5 Flash (60 req/min) is generous enough for clinical use. Key is stored
-// locally per browser; never transmitted to our servers.
-function _getGeminiKey() {
-  try { return localStorage.getItem('acb-gemini-key') || ''; } catch(e) { return ''; }
-}
-function _setGeminiKey(k) {
-  try {
-    if (k && k.trim()) localStorage.setItem('acb-gemini-key', k.trim());
-    else localStorage.removeItem('acb-gemini-key');
-  } catch(e) {}
-  _updateAiStatusLabel();
-}
-function _promptGeminiKey() {
-  const current = _getGeminiKey();
-  const url = 'https://aistudio.google.com/app/apikey';
-  const msg = (LANG === 'zh'
-    ? `請貼上 Google Gemini API 金鑰\n(免費,在 ${url} 取得)\n\n• 金鑰只存在你這台瀏覽器的 localStorage\n• 每次語音辨識時送出 transcript + 藥物清單給 Google\n• 留空可清除已存金鑰`
-    : `Paste your Google Gemini API key\n(free, get one at ${url})\n\n• Key is stored only in your browser's localStorage\n• Each voice query sends transcript + drug list to Google\n• Leave blank to clear the saved key`);
-  const k = prompt(msg, current);
-  if (k !== null) _setGeminiKey(k);
-}
-function _updateAiStatusLabel() {
-  const el = document.getElementById('voiceAiStatus');
-  if (!el) return;
-  const hasKey = !!_getGeminiKey();
-  el.textContent = hasKey
-    ? (LANG === 'zh' ? '✓ AI 加強辨識已啟用(點此管理)' : '✓ AI-assisted matching on (click to manage)')
-    : (LANG === 'zh' ? '+ 加設 Gemini 金鑰開啟 AI 輔助辨識' : '+ Add a Gemini key to enable AI-assisted matching');
-  el.style.color = hasKey ? 'var(--brand-600)' : '#64748b';
-}
-window._promptGeminiKey = _promptGeminiKey;
-window._updateAiStatusLabel = _updateAiStatusLabel;
-
-async function _geminiMatchDrug(transcript) {
-  const key = _getGeminiKey();
-  if (!key) return null;
-  const drugList = DRUGS.map(d => d.name).join('\n');
-  const promptText = `You are helping a Taiwan-based clinician use an anticholinergic-burden calculator. They just dictated a drug name; speech-to-text may have misheard it. The transcript is:
-
-"${transcript}"
-
-Below is the complete list of 122 drug generic names in the database. Determine which single drug they most likely intended. Consider:
-- Phonetic similarity (e.g. "play topic" sounds like "Quetiapine" because of "k-T-pic" / "Que-tia-pine")
-- Common STT errors with medical/chemical names
-- Chinese-English mixed pronunciations (Taiwan clinicians)
-- If transcript is clearly not a drug name (small talk, random words), reply with "null"
-
-REPLY FORMAT: exact drug name from the list (verbatim), OR the literal word null. No quotes, no explanation.
-
-DRUG LIST:
-${drugList}
-
-INTENDED DRUG:`;
-  try {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 40 }
-      })
-    });
-    if (!resp.ok) {
-      console.warn('Gemini HTTP error:', resp.status);
-      return null;
-    }
-    const data = await resp.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-    if (!raw || raw.toLowerCase() === 'null') return null;
-    // Strip quotes/punctuation Gemini might add despite the instruction
-    const cleaned = raw.replace(/^["'`]+|["'`.,;:]+$/g, '').trim();
-    return DRUGS.find(d => d.name === cleaned)
-        || DRUGS.find(d => d.name.toLowerCase() === cleaned.toLowerCase())
-        || null;
-  } catch(e) {
-    console.warn('Gemini call failed:', e);
-    return null;
-  }
-}
-window._geminiMatchDrug = _geminiMatchDrug;
+// (Removed: prior Gemini-API path — user requested no external API calls.
+//  Local fuzzy + phonetic + manual picker provides equivalent UX without
+//  transmitting any data off the browser.)
 
 // Dismiss inline feedback nudge for the rest of this session (sessionStorage,
 // not localStorage — so opening a fresh browser session re-offers feedback)
