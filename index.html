@@ -2008,19 +2008,81 @@ function _stopVoiceInput() {
   if (modal) modal.classList.add('hidden');
 }
 
+// Metaphone-style phonetic key — collapses common SR mishearings
+// "Quetiapine" → "ktpn" / "quit typing" → "kttpng" → "ktpng" → Lev=1 vs ktpn
+// Removes vowels (most SR variation), normalises confusable consonants,
+// dedupes doubled letters caused by word-boundary insertion.
+function _phoneticKey(s) {
+  let p = String(s).toLowerCase().replace(/[^a-z]/g, '');
+  if (!p) return '';
+  p = p.replace(/ph/g, 'f');          // ph → f (phen, philip, etc.)
+  p = p.replace(/[ckq]/g, 'k');       // c/k/q → k (Quetiapine ≡ Ketiapine)
+  p = p.replace(/[xz]/g, 's');        // x/z → s
+  p = p.replace(/[aeiouy]+/g, '');    // strip vowel runs (highest SR variance)
+  p = p.replace(/(.)\1+/g, '$1');     // dedupe consecutive consonants
+  return p;
+}
+
+let _drugPhoneticIndex = null;
+function _buildDrugPhoneticIndex() {
+  if (_drugPhoneticIndex) return _drugPhoneticIndex;
+  _drugPhoneticIndex = DRUGS.map(d => {
+    const fullKey = _phoneticKey(d.name);
+    // Multi-word drugs also indexed by first-word phonetic key
+    const fwKey = d.name.includes(' ') ? _phoneticKey(d.name.split(' ')[0]) : null;
+    return { drug: d, key: fullKey, firstWordKey: fwKey };
+  }).filter(e => e.key.length >= 3);
+  return _drugPhoneticIndex;
+}
+
+// Phonetic matcher — only used as voice fallback when character-based
+// _fuzzyMatchOCR misses (because STT often produces spelling-distant but
+// phonetically-close transcripts like "quit typing" ≈ "Quetiapine").
+function _voiceMatchDrugs(transcript) {
+  const idx = _buildDrugPhoneticIndex();
+  const cleanText = String(transcript || '').toLowerCase().replace(/[^a-z\s]/g, '');
+  const words = cleanText.split(/\s+/).filter(w => w.length >= 2);
+  // Candidates: full mashed transcript, each word, each adjacent bigram
+  const cands = [cleanText.replace(/\s+/g, '')].concat(words);
+  for (let i = 0; i < words.length - 1; i++) cands.push(words[i] + words[i+1]);
+  const matches = new Map();
+  for (const cand of cands) {
+    const candKey = _phoneticKey(cand);
+    if (candKey.length < 3) continue;
+    for (const entry of idx) {
+      let score = 0;
+      const distFull = _lev(candKey, entry.key);
+      const minLen = Math.min(candKey.length, entry.key.length);
+      if (distFull === 0 && minLen >= 3) score = 100;
+      else if (distFull === 1 && minLen >= 3) score = 90;
+      else if (distFull === 2 && minLen >= 5) score = 75;
+      // First-word fallback for multi-word drug names (e.g. "Cough Mixture")
+      if (entry.firstWordKey) {
+        const fwDist = _lev(candKey, entry.firstWordKey);
+        if (fwDist === 0 && entry.firstWordKey.length >= 3) score = Math.max(score, 95);
+        else if (fwDist === 1 && entry.firstWordKey.length >= 4) score = Math.max(score, 80);
+      }
+      if (score > 0) {
+        const existing = matches.get(entry.drug.atc);
+        if (!existing || score > existing.score) {
+          matches.set(entry.drug.atc, { drug: entry.drug, score, source: cand });
+        }
+      }
+    }
+  }
+  return [...matches.values()].sort((a, b) => b.score - a.score);
+}
+
 function _processVoiceCandidates(candidates) {
-  // Strategy: try each top-3 transcript through the existing fuzzy matcher;
-  // if any candidate produces drug matches (passing the same passScore /
-  // passTop filters as OCR), auto-add them; otherwise fall back to populating
-  // the search input with the top transcript so the user can edit / confirm.
+  // Path 1: try each transcript through the character-based fuzzy matcher.
+  // Voice has no dose context → use the clean-token / exact-match path:
+  // generic drugs with score ≥100, source-driven by passTop.
   const drugInput = document.getElementById('drugInput');
   let added = 0;
   const addedNames = [];
   for (const transcript of candidates) {
     const cands = _fuzzyMatchOCR(transcript);
     const top = window._lastSrcTop || new Map();
-    // Voice has no dose context → use the clean-token / exact-match path:
-    // generic drugs with score ≥100, source-driven by passTop.
     const passTop = (c) => {
       const tx = top.get(c.source);
       return !!(tx && tx.atc === c.drug.atc && tx.name === c.drug.name);
@@ -2028,19 +2090,36 @@ function _processVoiceCandidates(candidates) {
     const matches = cands.filter(c => c.kind === 'generic' && c.score >= 100 && passTop(c));
     if (matches.length) {
       const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
-      // Drop substring-subsumed candidates (Prednisolone inside Methylprednisolone)
       const finalMatches = matches.filter(c => {
         const cn = norm(c.drug.name);
         return !matches.some(o => o !== c && norm(o.drug.name).length > cn.length && norm(o.drug.name).includes(cn));
       });
       for (const c of finalMatches) {
         if (!selected.find(d => d.atc === c.drug.atc && d.name === c.drug.name)) {
-          selected.push(c.drug);
-          added++;
-          addedNames.push(c.drug.name);
+          selected.push(c.drug); added++; addedNames.push(c.drug.name);
         }
       }
-      if (added > 0) break; // first transcript with hits wins
+      if (added > 0) break;
+    }
+  }
+  // Path 2: PHONETIC fallback. If char-based path missed everything (common
+  // when STT spells the drug very differently — "quit typing" → "Quetiapine"),
+  // try matching by phonetic key (consonant skeleton after vowel removal).
+  if (added === 0) {
+    const phBest = new Map();
+    for (const transcript of candidates) {
+      const phMatches = _voiceMatchDrugs(transcript);
+      for (const m of phMatches) {
+        const existing = phBest.get(m.drug.atc);
+        if (!existing || m.score > existing.score) phBest.set(m.drug.atc, m);
+      }
+    }
+    const phHits = [...phBest.values()].filter(m => m.score >= 90)
+                    .sort((a, b) => b.score - a.score);
+    for (const m of phHits) {
+      if (!selected.find(d => d.atc === m.drug.atc && d.name === m.drug.name)) {
+        selected.push(m.drug); added++; addedNames.push(m.drug.name);
+      }
     }
   }
   _stopVoiceInput();
@@ -2049,7 +2128,7 @@ function _processVoiceCandidates(candidates) {
     drugInput.value = '';
     _showToast((LANG === 'zh' ? '已加入 ' : 'Added ') + added + (LANG === 'zh' ? ' 個藥物:' : ' drug(s): ') + addedNames.join('、'));
   } else {
-    // No automatic hit — drop transcript into the search box and let user pick
+    // Still no hit — drop top transcript into the search box for manual confirm
     drugInput.value = candidates[0] || '';
     if (typeof runSearch === 'function') runSearch();
     _showToast(t('voiceHeard') + ': ' + (candidates[0] || ''));
