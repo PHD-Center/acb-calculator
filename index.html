@@ -457,6 +457,39 @@
   </section>
 
   <!-- OCR Modal -->
+  <!-- Bulk voice training modal — walks through every drug -->
+  <div id="voiceTrainingModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 no-print" style="background:rgba(15,23,42,0.55);">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl" style="text-align:left;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="font-size:16px;font-weight:600;color:#1e293b;display:flex;align-items:center;gap:8px;">
+          <span>🎓</span> <span id="trainTitleEl">語音訓練</span>
+        </h3>
+        <span id="trainProgress" style="font-size:12px;color:#64748b;font-variant-numeric:tabular-nums;">0 / 0</span>
+      </div>
+      <!-- Progress bar -->
+      <div style="height:4px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-bottom:18px;">
+        <div id="trainProgressBar" style="height:100%;background:var(--brand-600);width:0%;transition:width .2s;"></div>
+      </div>
+      <div style="text-align:center;padding:8px 0 16px;">
+        <p style="font-size:12px;color:#64748b;margin-bottom:4px;" id="trainPromptEl">請說</p>
+        <p id="trainCurrentDrug" style="font-size:24px;font-weight:700;color:var(--brand-700);line-height:1.2;min-height:1.4em;letter-spacing:-0.01em;">—</p>
+        <p id="trainStatus" style="font-size:12px;color:#94a3b8;margin-top:10px;min-height:1.5em;">點下方麥克風開始</p>
+        <button type="button" id="trainMicBtn" onclick="_trainRecordOne()"
+                style="width:72px;height:72px;border-radius:9999px;background:var(--brand-600);color:#fff;font-size:30px;border:0;cursor:pointer;margin-top:8px;box-shadow:0 6px 18px rgba(46,90,82,0.35);transition:transform .12s;">🎤</button>
+        <p id="trainHeard" style="font-size:11px;color:#94a3b8;margin-top:10px;min-height:1.3em;"></p>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:space-between;">
+        <button type="button" onclick="_trainPrev()" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:8px;font-size:12px;cursor:pointer;">← 上一個</button>
+        <button type="button" onclick="_trainSkip()" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:8px;font-size:12px;cursor:pointer;">跳過</button>
+        <button type="button" onclick="_trainNext()" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:8px;font-size:12px;cursor:pointer;">下一個 →</button>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+        <button type="button" onclick="_stopVoiceTraining()" style="background:none;border:0;color:#64748b;font-size:12px;cursor:pointer;text-decoration:underline;">暫停 · 之後可從這裡繼續</button>
+        <button type="button" onclick="_trainJumpToUnlearned()" style="background:none;border:0;color:var(--brand-600);font-size:12px;cursor:pointer;text-decoration:underline;">跳到未學會</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Voice input status modal (Web Speech API) -->
   <div id="voiceModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 no-print" style="background:rgba(15,23,42,0.5);">
     <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center">
@@ -479,7 +512,11 @@
           <button type="button" onclick="_voicePickerNone()" class="flex-1 px-4 py-2 text-sm border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition" id="voicePickerNoneBtn">都不是 · 手動輸入</button>
           <button type="button" onclick="_stopVoiceInput()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
         </div>
-        <p class="text-xs text-slate-400 mt-3 text-center" id="voiceLearnHintEl" style="font-size:10.5px;">點選後系統會記住你的發音 · <button type="button" onclick="_manageVoiceCorrections()" style="background:none;border:0;color:#64748b;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;">已學會的清單</button></p>
+        <p class="text-xs text-slate-400 mt-3 text-center" id="voiceLearnHintEl" style="font-size:10.5px;">
+          點選後系統會記住你的發音
+          · <button type="button" onclick="_manageVoiceCorrections()" style="background:none;border:0;color:#64748b;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;">已學會的清單</button>
+          · <button type="button" onclick="_startVoiceTraining()" style="background:none;border:0;color:var(--brand-600);text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;font-weight:600;">🎓 訓練全部 122 個藥</button>
+        </p>
       </div>
     </div>
   </div>
@@ -2367,6 +2404,178 @@ function _manageVoiceCorrections() {
   }
 }
 window._manageVoiceCorrections = _manageVoiceCorrections;
+
+// ===== Bulk voice training mode =====
+// Power-user feature: walk through all 122 drugs in one session. Each drug
+// shows on screen, user taps the big mic button + reads the drug name aloud,
+// parallel zh-TW + en-US recognizers capture transcripts, all get saved as
+// learned corrections for that drug. Progress saved per index in localStorage.
+let _trainIdx = 0;
+let _trainRecording = false;
+let _trainRecognizers = [];
+
+function _isDrugLearned(drug) {
+  const data = _getVoiceCorrections();
+  for (const k in data) {
+    if (data[k].atc === drug.atc && data[k].name === drug.name) return true;
+  }
+  return false;
+}
+
+function _startVoiceTraining() {
+  // Resume from saved index if any
+  try { _trainIdx = parseInt(localStorage.getItem('acb-voice-train-idx') || '0', 10) || 0; } catch(e) {}
+  if (_trainIdx < 0 || _trainIdx >= DRUGS.length) _trainIdx = 0;
+  // Close voice modal if open
+  document.getElementById('voiceModal')?.classList.add('hidden');
+  _stopVoiceInput();
+  document.getElementById('voiceTrainingModal').classList.remove('hidden');
+  _trainShow();
+}
+
+function _stopVoiceTraining() {
+  _trainAbortRecording();
+  try { localStorage.setItem('acb-voice-train-idx', String(_trainIdx)); } catch(e) {}
+  document.getElementById('voiceTrainingModal').classList.add('hidden');
+}
+
+function _trainAbortRecording() {
+  _trainRecording = false;
+  for (const r of _trainRecognizers) { try { r.abort(); } catch(e) {} }
+  _trainRecognizers = [];
+}
+
+function _trainShow() {
+  _trainAbortRecording();
+  const drug = DRUGS[_trainIdx];
+  if (!drug) { _trainComplete(); return; }
+  const learned = _isDrugLearned(drug);
+  document.getElementById('trainCurrentDrug').textContent = drug.name;
+  document.getElementById('trainProgress').textContent = `${_trainIdx + 1} / ${DRUGS.length}`;
+  document.getElementById('trainProgressBar').style.width = `${((_trainIdx + 1) / DRUGS.length) * 100}%`;
+  document.getElementById('trainHeard').textContent = '';
+  document.getElementById('trainStatus').textContent = learned
+    ? (LANG === 'zh' ? '✓ 已學會,可重訓加強' : '✓ Already learned (retrain to strengthen)')
+    : (LANG === 'zh' ? '點下方麥克風,然後唸出藥名' : 'Tap the mic, then say the drug name');
+}
+
+function _trainRecordOne() {
+  if (_trainRecording || !_SR) return;
+  const drug = DRUGS[_trainIdx];
+  if (!drug) return;
+  _trainRecording = true;
+  document.getElementById('trainStatus').textContent = (LANG === 'zh' ? '聽取中…' : 'Listening…');
+  document.getElementById('trainHeard').textContent = '';
+  document.getElementById('trainMicBtn').style.transform = 'scale(0.92)';
+
+  const transcripts = [];
+  let endedCount = 0;
+  let processed = false;
+
+  const makeRecog = (lang) => {
+    const r = new _SR();
+    r.lang = lang;
+    r.continuous = false;
+    r.interimResults = true;
+    r.maxAlternatives = 5;
+    r.onresult = (ev) => {
+      let interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const result = ev.results[i];
+        if (result.isFinal) {
+          for (let k = 0; k < result.length; k++) transcripts.push(result[k].transcript);
+        } else { interim += result[0].transcript; }
+      }
+      const heardEl = document.getElementById('trainHeard');
+      if (heardEl) {
+        const all = [...new Set(transcripts.concat(interim ? [interim] : []))].slice(0, 4);
+        heardEl.textContent = (LANG === 'zh' ? '辨識到:' : 'Heard: ') + all.join(' / ');
+      }
+    };
+    r.onerror = (ev) => { console.warn('Train SR ' + lang + ':', ev.error); };
+    r.onend = () => {
+      endedCount++;
+      if (endedCount >= _trainRecognizers.length && !processed) {
+        processed = true;
+        _trainProcessResult(drug, transcripts);
+      }
+    };
+    return r;
+  };
+
+  _trainRecognizers = [makeRecog('zh-TW'), makeRecog('en-US')];
+  try {
+    _trainRecognizers[0].start();
+    setTimeout(() => { try { _trainRecognizers[1].start(); } catch(e) {
+      console.warn('Train parallel SR (en-US) failed:', e);
+      _trainRecognizers = [_trainRecognizers[0]];
+    } }, 60);
+  } catch(e) {
+    console.warn('Train SR start failed:', e);
+    _trainRecording = false;
+    document.getElementById('trainMicBtn').style.transform = '';
+  }
+}
+
+function _trainProcessResult(drug, transcripts) {
+  _trainRecording = false;
+  document.getElementById('trainMicBtn').style.transform = '';
+  const unique = [...new Set(transcripts.filter(Boolean))];
+  if (unique.length === 0) {
+    document.getElementById('trainStatus').textContent = (LANG === 'zh' ? '沒抓到聲音 · 點麥克風再試' : 'Nothing heard — tap mic to retry');
+    return;
+  }
+  // Save mappings: every transcript for this drug
+  _saveVoiceCorrection(unique, drug);
+  document.getElementById('trainStatus').textContent = (LANG === 'zh' ? '✓ 已學會!' : '✓ Learned!');
+  // Auto-advance after a moment
+  setTimeout(() => { if (!_trainRecording) _trainNext(); }, 700);
+}
+
+function _trainPrev() {
+  _trainAbortRecording();
+  if (_trainIdx > 0) {
+    _trainIdx--;
+    try { localStorage.setItem('acb-voice-train-idx', String(_trainIdx)); } catch(e) {}
+    _trainShow();
+  }
+}
+function _trainSkip() { _trainNext(); }
+function _trainNext() {
+  _trainAbortRecording();
+  _trainIdx++;
+  try { localStorage.setItem('acb-voice-train-idx', String(_trainIdx)); } catch(e) {}
+  if (_trainIdx >= DRUGS.length) { _trainComplete(); return; }
+  _trainShow();
+}
+function _trainJumpToUnlearned() {
+  _trainAbortRecording();
+  for (let i = _trainIdx + 1; i < DRUGS.length; i++) {
+    if (!_isDrugLearned(DRUGS[i])) { _trainIdx = i; _trainShow(); return; }
+  }
+  // Wrap around — search from start
+  for (let i = 0; i < _trainIdx; i++) {
+    if (!_isDrugLearned(DRUGS[i])) { _trainIdx = i; _trainShow(); return; }
+  }
+  alert(LANG === 'zh' ? '所有藥物都已學會 🎉' : 'All drugs have been learned 🎉');
+}
+function _trainComplete() {
+  const data = _getVoiceCorrections();
+  const learnedDrugCount = new Set();
+  for (const k in data) learnedDrugCount.add(data[k].atc);
+  alert(LANG === 'zh'
+    ? `訓練完成!共學會 ${learnedDrugCount.size} 個藥物的發音(共 ${Object.keys(data).length} 個發音 pattern)。`
+    : `Training complete! Learned pronunciations for ${learnedDrugCount.size} drug(s) (${Object.keys(data).length} total patterns).`);
+  _stopVoiceTraining();
+}
+
+window._startVoiceTraining = _startVoiceTraining;
+window._stopVoiceTraining = _stopVoiceTraining;
+window._trainRecordOne = _trainRecordOne;
+window._trainPrev = _trainPrev;
+window._trainSkip = _trainSkip;
+window._trainNext = _trainNext;
+window._trainJumpToUnlearned = _trainJumpToUnlearned;
 
 // Dismiss inline feedback nudge for the rest of this session (sessionStorage,
 // not localStorage — so opening a fresh browser session re-offers feedback)
