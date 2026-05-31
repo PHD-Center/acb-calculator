@@ -831,8 +831,8 @@ const I18N = {
     ocrBtn: "拍照/上傳藥歷辨識",
     ocrHint: "支援中英文藥歷影像(直接螢幕截圖效果最佳)",
     voiceBtnLabel: "語音輸入",
-    voiceHint: "點按後說藥名 · 經瀏覽器雲端處理",
-    voiceListening: "聽取中…請說藥名",
+    voiceHint: "中英文皆可、可混講 · 經瀏覽器雲端處理",
+    voiceListening: "聽取中…請說藥名(中文 / 英文 / 混講皆可)",
     voiceError: "辨識失敗",
     voiceHeard: "辨識到",
     voiceCancel: "取消",
@@ -1011,8 +1011,8 @@ const I18N = {
     ocrBtn: "Scan / upload medication list",
     ocrHint: "OCR for English/Chinese medication images (clear screenshots work best)",
     voiceBtnLabel: "Voice input",
-    voiceHint: "Tap and speak a drug name · processed via browser cloud STT",
-    voiceListening: "Listening… speak the drug name",
+    voiceHint: "English / Chinese / mixed · processed via browser cloud STT",
+    voiceListening: "Listening… speak the drug name (English / Chinese / mixed)",
     voiceError: "Recognition failed",
     voiceHeard: "Heard",
     voiceCancel: "Cancel",
@@ -1833,25 +1833,29 @@ function _downloadRIS() {
 }
 window._downloadRIS = _downloadRIS;
 
-// ===== Voice input (Web Speech API) =====
-// Lets clinicians dictate drug names hands-free (zh-TW / en-US). Reuses the
-// existing runSearch / _fuzzyMatchOCR fuzzy-match pipeline — voice transcript
-// is treated identically to typed text, so multi-drug utterances and Chinese
-// brand names flow through the same matching paths.
+// ===== Voice input (Web Speech API) — BILINGUAL parallel recognition =====
+// Clinicians in Taiwan frequently mix English drug names with Chinese dose
+// units ("Quetiapine 25 毫克") or use Chinese transliterations ("奎硫平").
+// Single-language recognition forces a choice and misses the other side.
+//
+// Strategy: spin up TWO parallel SpeechRecognition instances (one zh-TW,
+// one en-US) on the same microphone stream. Each independently transcribes
+// the audio with its own language model + 5 alternatives. After both end,
+// the combined candidate list (up to 10 transcripts) is fed through the
+// existing _fuzzyMatchOCR pipeline — whichever language model captured the
+// drug name correctly will produce a high-score match.
 const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let _voiceRecog = null;
+let _voiceRecogs = [];   // active recognizers (parallel)
+let _voiceAllFinals = []; // accumulated finals across recognizers
 
 function _hasVoiceSupport() { return !!_SR; }
 
 function _startVoiceInput() {
   if (!_SR) return;
-  // Abort any in-flight recognition so re-pressing 🎤 doesn't double-fire
-  if (_voiceRecog) { try { _voiceRecog.abort(); } catch(e) {} _voiceRecog = null; }
-  _voiceRecog = new _SR();
-  _voiceRecog.lang = (LANG === 'zh') ? 'zh-TW' : 'en-US';
-  _voiceRecog.continuous = false;
-  _voiceRecog.interimResults = true;
-  _voiceRecog.maxAlternatives = 3;
+  // Abort any in-flight recognizers so re-pressing 🎤 doesn't stack
+  _voiceRecogs.forEach(r => { try { r.abort(); } catch(e) {} });
+  _voiceRecogs = [];
+  _voiceAllFinals = [];
 
   const modal = document.getElementById('voiceModal');
   const status = document.getElementById('voiceStatus');
@@ -1860,47 +1864,87 @@ function _startVoiceInput() {
   transcript.textContent = '';
   status.textContent = t('voiceListening');
 
-  let finalsProcessed = false;
-  _voiceRecog.onresult = (ev) => {
-    let interim = '', finals = [];
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      const r = ev.results[i];
-      if (r.isFinal) {
-        for (let k = 0; k < r.length; k++) finals.push(r[k].transcript);
-      } else {
-        interim += r[0].transcript;
+  let processed = false;
+  let endedCount = 0;
+  const interimByLang = { 'zh-TW': '', 'en-US': '' };
+
+  const makeRecognizer = (lang) => {
+    const r = new _SR();
+    r.lang = lang;
+    r.continuous = false;
+    r.interimResults = true;
+    r.maxAlternatives = 5;
+    r.onresult = (ev) => {
+      let interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const result = ev.results[i];
+        if (result.isFinal) {
+          for (let k = 0; k < result.length; k++) {
+            _voiceAllFinals.push(result[k].transcript);
+          }
+        } else {
+          interim += result[0].transcript;
+        }
       }
-    }
-    transcript.textContent = interim || finals.join(' | ');
-    if (finals.length && !finalsProcessed) {
-      finalsProcessed = true;
-      _processVoiceCandidates(finals);
-    }
+      if (interim) interimByLang[lang] = interim;
+      // Show both interim streams side by side so user sees both languages working
+      const zhPart = interimByLang['zh-TW'];
+      const enPart = interimByLang['en-US'];
+      const parts = [];
+      if (zhPart) parts.push('🇹🇼 ' + zhPart);
+      if (enPart) parts.push('🇺🇸 ' + enPart);
+      transcript.innerHTML = parts.join('<br>');
+    };
+    r.onerror = (ev) => {
+      // Silently note errors per language — the other may still succeed
+      console.warn('SR ' + lang + ' error:', ev.error);
+    };
+    r.onend = () => {
+      endedCount++;
+      // When both recognizers have finished (silence + auto-stop), process all
+      // collected candidates. If only one recognizer was spawned (parallel fail
+      // fallback), process when that one ends.
+      if (endedCount >= _voiceRecogs.length && !processed) {
+        processed = true;
+        setTimeout(() => {
+          if (_voiceAllFinals.length) {
+            _processVoiceCandidates(_voiceAllFinals);
+          } else {
+            // No finals captured — close politely
+            status.textContent = t('voiceError') + ' — ' + (LANG === 'zh' ? '沒抓到語音' : 'no audio captured');
+            setTimeout(_stopVoiceInput, 1400);
+          }
+        }, 200);
+      }
+    };
+    return r;
   };
-  _voiceRecog.onerror = (ev) => {
-    const errLabel = t('voiceError') + (ev.error ? ': ' + ev.error : '');
-    status.textContent = errLabel;
-    setTimeout(_stopVoiceInput, 1800);
-  };
-  _voiceRecog.onend = () => {
-    // If we reached here without finals (silence / aborted), close modal politely
-    if (!finalsProcessed && !modal.classList.contains('hidden')) {
-      setTimeout(() => {
-        if (!finalsProcessed) _stopVoiceInput();
-      }, 400);
-    }
-  };
-  try { _voiceRecog.start(); } catch(e) {
+
+  // Try parallel zh-TW + en-US. Some browsers/devices may refuse the second
+  // mic-using recognizer — in that case we silently fall back to single.
+  const rZh = makeRecognizer('zh-TW');
+  const rEn = makeRecognizer('en-US');
+  _voiceRecogs = [rZh, rEn];
+
+  try {
+    rZh.start();
+    // Slight delay before starting second instance to avoid mic-access race
+    setTimeout(() => {
+      try { rEn.start(); } catch(e) {
+        console.warn('Parallel SR (en-US) failed to start, continuing with zh-TW only:', e);
+        _voiceRecogs = [rZh];   // adjust expected end count
+      }
+    }, 60);
+  } catch(e) {
     console.warn('Voice start failed:', e);
     _stopVoiceInput();
   }
 }
 
 function _stopVoiceInput() {
-  if (_voiceRecog) {
-    try { _voiceRecog.abort(); } catch(e) {}
-    _voiceRecog = null;
-  }
+  _voiceRecogs.forEach(r => { try { r.abort(); } catch(e) {} });
+  _voiceRecogs = [];
+  _voiceAllFinals = [];
   const modal = document.getElementById('voiceModal');
   if (modal) modal.classList.add('hidden');
 }
