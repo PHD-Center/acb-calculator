@@ -206,6 +206,16 @@
     #fbFloatBtnLabel { display: none; }
   }
 
+  /* ===== Voice input modal (pulse) ===== */
+  .voice-pulse {
+    display: inline-block;
+    animation: voicePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes voicePulse {
+    0%, 100% { transform: scale(1);    opacity: 1; }
+    50%      { transform: scale(1.14); opacity: 0.82; }
+  }
+
   /* ===== Demographic chips (Role / Years / Specialty) ===== */
   /* Grid layouts enforce row counts even when text width varies:
      - Role (5 options)  → 1 row × 5 cols
@@ -402,18 +412,34 @@
       <div id="suggestions" class="hidden mt-2 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto"></div>
     </form>
     <p id="inputHintEl" class="text-xs text-slate-400 mt-2">輸入藥名 → 點「加入」按鈕 (或從建議中選)</p>
-    <div class="mt-3 flex items-center gap-2">
+    <div class="mt-3 flex items-center gap-2 flex-wrap">
       <button type="button" id="ocrBtn" onclick="_prewarmOCR();document.getElementById('ocrFile').click();"
               class="inline-flex items-center gap-1.5 px-3 py-2 border border-emerald-300 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-medium hover:bg-emerald-100 transition">
         <span>📷</span> <span id="ocrBtnLabel">拍照/上傳藥歷辨識</span>
       </button>
+      <button type="button" id="voiceBtn" onclick="_startVoiceInput()"
+              class="inline-flex items-center gap-1.5 px-3 py-2 border border-sky-300 bg-sky-50 text-sky-800 rounded-lg text-xs font-medium hover:bg-sky-100 transition no-print"
+              style="display:none;">
+        <span>🎤</span> <span id="voiceBtnLabel">語音輸入</span>
+      </button>
       <span id="ocrHintEl" class="text-xs text-slate-400">支援中英文藥歷影像(直接螢幕截圖效果最佳)</span>
+      <span id="voiceHintEl" class="text-xs text-slate-400" style="display:none;">點按後說藥名 · 經瀏覽器雲端處理</span>
       <input type="file" id="ocrFile" accept="image/*" capture="environment" style="display:none;" onchange="runOCR(this.files[0])">
     </div>
     <p id="methodNoteEl" class="text-xs text-slate-500 mt-2 italic">外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關)。</p>
   </section>
 
   <!-- OCR Modal -->
+  <!-- Voice input status modal (Web Speech API) -->
+  <div id="voiceModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-3 no-print" style="background:rgba(15,23,42,0.5);">
+    <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center">
+      <div class="text-5xl mb-3 voice-pulse" aria-hidden="true">🎤</div>
+      <p id="voiceStatus" class="text-base font-semibold text-slate-800">聽取中…請說藥名</p>
+      <p id="voiceTranscript" class="text-sm text-slate-500 mt-3" style="min-height:1.5em;"></p>
+      <button type="button" onclick="_stopVoiceInput()" id="voiceCancelBtn" class="mt-4 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
+    </div>
+  </div>
+
   <div id="ocrModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3" style="background:rgba(15,23,42,0.5);">
     <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 shadow-xl">
       <div class="flex items-center justify-between mb-3">
@@ -798,6 +824,12 @@ const I18N = {
     inputHint: "輸入藥名 → 點「加入」按鈕 (或從建議中選)",
     ocrBtn: "拍照/上傳藥歷辨識",
     ocrHint: "支援中英文藥歷影像(直接螢幕截圖效果最佳)",
+    voiceBtnLabel: "語音輸入",
+    voiceHint: "點按後說藥名 · 經瀏覽器雲端處理",
+    voiceListening: "聽取中…請說藥名",
+    voiceError: "辨識失敗",
+    voiceHeard: "辨識到",
+    voiceCancel: "取消",
     ocrModalTitle: "辨識結果",
     ocrLoadingHint: "第一次使用需下載辨識引擎(約 10 MB),稍候片刻",
     ocrCancel: "取消",
@@ -972,6 +1004,12 @@ const I18N = {
     inputHint: "Type drug name → tap \"Add\" (or pick a suggestion)",
     ocrBtn: "Scan / upload medication list",
     ocrHint: "OCR for English/Chinese medication images (clear screenshots work best)",
+    voiceBtnLabel: "Voice input",
+    voiceHint: "Tap and speak a drug name · processed via browser cloud STT",
+    voiceListening: "Listening… speak the drug name",
+    voiceError: "Recognition failed",
+    voiceHeard: "Heard",
+    voiceCancel: "Cancel",
     ocrModalTitle: "OCR results",
     ocrLoadingHint: "First use downloads the OCR engine (~10 MB). Please wait.",
     ocrCancel: "Cancel",
@@ -1164,6 +1202,7 @@ function applyStaticLang() {
     inputLabelEl: 'inputLabel', inputEyebrow: 'inputEyebrow', drugInput: { attr: 'placeholder', key: 'placeholder' },
     addBtnEl: 'addBtn', inputHintEl: 'inputHint',
     ocrBtnLabel: 'ocrBtn', ocrHintEl: 'ocrHint',
+    voiceBtnLabel: 'voiceBtnLabel', voiceHintEl: 'voiceHint', voiceCancelBtn: 'voiceCancel',
     ocrModalTitleEl: 'ocrModalTitle', ocrLoadingHintEl: 'ocrLoadingHint',
     ocrCancelEl: 'ocrCancel', ocrConfirmEl: 'ocrConfirm',
     methodNoteEl: 'methodNote',
@@ -1785,6 +1824,128 @@ function _downloadRIS() {
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 window._downloadRIS = _downloadRIS;
+
+// ===== Voice input (Web Speech API) =====
+// Lets clinicians dictate drug names hands-free (zh-TW / en-US). Reuses the
+// existing runSearch / _fuzzyMatchOCR fuzzy-match pipeline — voice transcript
+// is treated identically to typed text, so multi-drug utterances and Chinese
+// brand names flow through the same matching paths.
+const _SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let _voiceRecog = null;
+
+function _hasVoiceSupport() { return !!_SR; }
+
+function _startVoiceInput() {
+  if (!_SR) return;
+  // Abort any in-flight recognition so re-pressing 🎤 doesn't double-fire
+  if (_voiceRecog) { try { _voiceRecog.abort(); } catch(e) {} _voiceRecog = null; }
+  _voiceRecog = new _SR();
+  _voiceRecog.lang = (LANG === 'zh') ? 'zh-TW' : 'en-US';
+  _voiceRecog.continuous = false;
+  _voiceRecog.interimResults = true;
+  _voiceRecog.maxAlternatives = 3;
+
+  const modal = document.getElementById('voiceModal');
+  const status = document.getElementById('voiceStatus');
+  const transcript = document.getElementById('voiceTranscript');
+  modal.classList.remove('hidden');
+  transcript.textContent = '';
+  status.textContent = t('voiceListening');
+
+  let finalsProcessed = false;
+  _voiceRecog.onresult = (ev) => {
+    let interim = '', finals = [];
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      if (r.isFinal) {
+        for (let k = 0; k < r.length; k++) finals.push(r[k].transcript);
+      } else {
+        interim += r[0].transcript;
+      }
+    }
+    transcript.textContent = interim || finals.join(' | ');
+    if (finals.length && !finalsProcessed) {
+      finalsProcessed = true;
+      _processVoiceCandidates(finals);
+    }
+  };
+  _voiceRecog.onerror = (ev) => {
+    const errLabel = t('voiceError') + (ev.error ? ': ' + ev.error : '');
+    status.textContent = errLabel;
+    setTimeout(_stopVoiceInput, 1800);
+  };
+  _voiceRecog.onend = () => {
+    // If we reached here without finals (silence / aborted), close modal politely
+    if (!finalsProcessed && !modal.classList.contains('hidden')) {
+      setTimeout(() => {
+        if (!finalsProcessed) _stopVoiceInput();
+      }, 400);
+    }
+  };
+  try { _voiceRecog.start(); } catch(e) {
+    console.warn('Voice start failed:', e);
+    _stopVoiceInput();
+  }
+}
+
+function _stopVoiceInput() {
+  if (_voiceRecog) {
+    try { _voiceRecog.abort(); } catch(e) {}
+    _voiceRecog = null;
+  }
+  const modal = document.getElementById('voiceModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function _processVoiceCandidates(candidates) {
+  // Strategy: try each top-3 transcript through the existing fuzzy matcher;
+  // if any candidate produces drug matches (passing the same passScore /
+  // passTop filters as OCR), auto-add them; otherwise fall back to populating
+  // the search input with the top transcript so the user can edit / confirm.
+  const drugInput = document.getElementById('drugInput');
+  let added = 0;
+  const addedNames = [];
+  for (const transcript of candidates) {
+    const cands = _fuzzyMatchOCR(transcript);
+    const top = window._lastSrcTop || new Map();
+    // Voice has no dose context → use the clean-token / exact-match path:
+    // generic drugs with score ≥100, source-driven by passTop.
+    const passTop = (c) => {
+      const tx = top.get(c.source);
+      return !!(tx && tx.atc === c.drug.atc && tx.name === c.drug.name);
+    };
+    const matches = cands.filter(c => c.kind === 'generic' && c.score >= 100 && passTop(c));
+    if (matches.length) {
+      const norm = s => String(s).toLowerCase().replace(/[^a-z]/g, '');
+      // Drop substring-subsumed candidates (Prednisolone inside Methylprednisolone)
+      const finalMatches = matches.filter(c => {
+        const cn = norm(c.drug.name);
+        return !matches.some(o => o !== c && norm(o.drug.name).length > cn.length && norm(o.drug.name).includes(cn));
+      });
+      for (const c of finalMatches) {
+        if (!selected.find(d => d.atc === c.drug.atc && d.name === c.drug.name)) {
+          selected.push(c.drug);
+          added++;
+          addedNames.push(c.drug.name);
+        }
+      }
+      if (added > 0) break; // first transcript with hits wins
+    }
+  }
+  _stopVoiceInput();
+  if (added > 0) {
+    render();
+    drugInput.value = '';
+    _showToast((LANG === 'zh' ? '已加入 ' : 'Added ') + added + (LANG === 'zh' ? ' 個藥物:' : ' drug(s): ') + addedNames.join('、'));
+  } else {
+    // No automatic hit — drop transcript into the search box and let user pick
+    drugInput.value = candidates[0] || '';
+    if (typeof runSearch === 'function') runSearch();
+    _showToast(t('voiceHeard') + ': ' + (candidates[0] || ''));
+  }
+}
+window._startVoiceInput = _startVoiceInput;
+window._stopVoiceInput = _stopVoiceInput;
 
 // ===== Research-grade feedback survey (Formspree backend) =====
 // Anonymous session ID — UUID stored in localStorage on first visit, persists
@@ -2663,6 +2824,13 @@ document.addEventListener("click", e => {
 
 $("clearAll").addEventListener("click", () => { selected.length = 0; render(); });
 
+// Surface the voice button only when Web Speech API is supported
+if (_hasVoiceSupport()) {
+  const vb = document.getElementById('voiceBtn');
+  const vh = document.getElementById('voiceHintEl');
+  if (vb) vb.style.display = 'inline-flex';
+  if (vh) vh.style.display = 'inline';
+}
 _renderLikertButtons();
 _renderDemographics();
 setLang(LANG);
