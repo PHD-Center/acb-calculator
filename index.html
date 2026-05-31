@@ -479,6 +479,7 @@
           <button type="button" onclick="_voicePickerNone()" class="flex-1 px-4 py-2 text-sm border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition" id="voicePickerNoneBtn">都不是 · 手動輸入</button>
           <button type="button" onclick="_stopVoiceInput()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
         </div>
+        <p class="text-xs text-slate-400 mt-3 text-center" id="voiceLearnHintEl" style="font-size:10.5px;">點選後系統會記住你的發音 · <button type="button" onclick="_manageVoiceCorrections()" style="background:none;border:0;color:#64748b;text-decoration:underline;cursor:pointer;padding:0;font-size:inherit;">已學會的清單</button></p>
       </div>
     </div>
   </div>
@@ -2120,6 +2121,21 @@ function _processVoiceCandidates(candidates) {
   // If the top scorer is high-confidence exact, auto-add. Otherwise present
   // a "did you mean?" picker with the top candidates so the user confirms.
   const drugInput = document.getElementById('drugInput');
+
+  // Path 0: learned-correction lookup — if this user has previously picked a
+  // specific drug for this STT pattern, jump straight to it.
+  const learned = _lookupVoiceCorrection(candidates);
+  if (learned) {
+    if (!selected.find(d => d.atc === learned.atc && d.name === learned.name)) {
+      selected.push(learned);
+      render();
+      drugInput.value = '';
+      _showToast((LANG === 'zh' ? '已加入(已學會):' : 'Added (learned): ') + learned.name);
+    }
+    _stopVoiceInput();
+    return;
+  }
+
   const scoreByAtc = new Map();    // atc → { drug, score, source, kind }
 
   const note = (drug, score, source, kind) => {
@@ -2201,6 +2217,8 @@ function _showVoicePicker(ranked, transcripts) {
   // Show ALL transcript variations so user knows what STT heard
   const uniqHeard = [...new Set(transcripts.filter(Boolean))].slice(0, 4);
   heardEl.textContent = (LANG === 'zh' ? '辨識到:' : 'Heard: ') + uniqHeard.join(' / ');
+  // Stash transcripts so _voicePickerSelect can save them as learned corrections
+  window._voicePickerTranscripts = uniqHeard;
   // Build clickable list
   window._voicePickerData = ranked;
   listEl.innerHTML = ranked.map((m, i) => {
@@ -2231,6 +2249,8 @@ function _voicePickerSelect(i) {
     document.getElementById('drugInput').value = '';
     _showToast((LANG === 'zh' ? '已加入:' : 'Added: ') + pick.drug.name);
   }
+  // Learn: remember that these transcripts mean this drug for next time
+  _saveVoiceCorrection(window._voicePickerTranscripts || [], pick.drug);
   _stopVoiceInput();
 }
 
@@ -2250,9 +2270,103 @@ window._voicePickerNone = _voicePickerNone;
 window._startVoiceInput = _startVoiceInput;
 window._stopVoiceInput = _stopVoiceInput;
 
-// (Removed: prior Gemini-API path — user requested no external API calls.
-//  Local fuzzy + phonetic + manual picker provides equivalent UX without
-//  transmitting any data off the browser.)
+// ===== Personal voice correction learning =====
+// Every time a user resolves an ambiguous STT result via the picker, store
+// phonetic(transcript) → drug. On future voice inputs, that mapping is
+// consulted FIRST — if the same audio pattern is heard again it resolves
+// instantly without showing the picker. Fully local (localStorage), per-
+// browser, no external services. The "voice model" learns from this user.
+function _getVoiceCorrections() {
+  try { return JSON.parse(localStorage.getItem('acb-voice-corrections') || '{}'); }
+  catch(e) { return {}; }
+}
+function _saveVoiceCorrection(transcripts, drug) {
+  if (!drug) return;
+  try {
+    const data = _getVoiceCorrections();
+    // Save phonetic key for each transcript variant we saw (typically 1-4
+    // from parallel SR top-5 × 2 languages). Multiple keys point to same drug
+    // — increases recall on slight pronunciation variation.
+    const set = new Set();
+    for (const tr of (Array.isArray(transcripts) ? transcripts : [transcripts])) {
+      const key = _phoneticKey(tr);
+      if (key && key.length >= 2) set.add(key);
+    }
+    for (const key of set) {
+      const existing = data[key];
+      if (existing && (existing.atc !== drug.atc || existing.name !== drug.name)) {
+        // Conflict — same phonetic key maps to a different drug this time.
+        // Keep the one with higher count; ties favour the newer mapping.
+        if ((existing.count || 1) > 1) continue;
+      }
+      data[key] = {
+        atc: drug.atc,
+        name: drug.name,
+        count: (existing && existing.atc === drug.atc ? (existing.count || 1) : 0) + 1,
+        ts: Date.now()
+      };
+    }
+    localStorage.setItem('acb-voice-corrections', JSON.stringify(data));
+  } catch(e) { /* localStorage full or disabled — silently skip */ }
+}
+function _lookupVoiceCorrection(transcripts) {
+  const data = _getVoiceCorrections();
+  if (!Object.keys(data).length) return null;
+  let best = null, bestScore = 0;
+  for (const tr of (Array.isArray(transcripts) ? transcripts : [transcripts])) {
+    const trKey = _phoneticKey(tr);
+    if (!trKey || trKey.length < 2) continue;
+    // Exact key match
+    if (data[trKey]) {
+      const score = 200 + (data[trKey].count || 1);  // very high — beats all other paths
+      if (score > bestScore) { bestScore = score; best = data[trKey]; }
+    }
+    // Lev=1 phonetic neighbour
+    for (const storedKey in data) {
+      if (storedKey === trKey) continue;
+      const minLen = Math.min(trKey.length, storedKey.length);
+      if (minLen < 3) continue;
+      const dist = _lev(trKey, storedKey);
+      if (dist === 1) {
+        const score = 150 + (data[storedKey].count || 1);
+        if (score > bestScore) { bestScore = score; best = data[storedKey]; }
+      }
+    }
+  }
+  if (!best) return null;
+  return DRUGS.find(d => d.atc === best.atc && d.name === best.name) || null;
+}
+function _clearVoiceCorrections() {
+  try { localStorage.removeItem('acb-voice-corrections'); } catch(e) {}
+}
+window._getVoiceCorrections = _getVoiceCorrections;
+window._clearVoiceCorrections = _clearVoiceCorrections;
+
+function _manageVoiceCorrections() {
+  const data = _getVoiceCorrections();
+  const entries = Object.entries(data);
+  if (!entries.length) {
+    alert(LANG === 'zh' ? '尚未學會任何發音。\n下次語音辨識選錯時,點對的選項即可自動學會。' : 'No learned voice corrections yet.\nNext time you fix a mishearing via the picker, it will be remembered.');
+    return;
+  }
+  // Group by drug
+  const byDrug = {};
+  for (const [key, v] of entries) {
+    if (!byDrug[v.name]) byDrug[v.name] = { count: 0, keys: [] };
+    byDrug[v.name].count += (v.count || 1);
+    byDrug[v.name].keys.push(key);
+  }
+  const lines = Object.entries(byDrug)
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([name, info]) => `${name} (×${info.count}) — keys: ${info.keys.slice(0, 3).join(', ')}`)
+    .join('\n');
+  const msg = (LANG === 'zh' ? `已學會 ${entries.length} 個發音 → ${Object.keys(byDrug).length} 個藥物:\n\n${lines}\n\n要全部清除嗎?` : `Learned ${entries.length} voice pattern(s) → ${Object.keys(byDrug).length} drug(s):\n\n${lines}\n\nClear all learned corrections?`);
+  if (confirm(msg)) {
+    _clearVoiceCorrections();
+    alert(LANG === 'zh' ? '已清除' : 'Cleared');
+  }
+}
+window._manageVoiceCorrections = _manageVoiceCorrections;
 
 // Dismiss inline feedback nudge for the rest of this session (sessionStorage,
 // not localStorage — so opening a fresh browser session re-offers feedback)
