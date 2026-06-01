@@ -2302,7 +2302,7 @@ window._stopVoiceInput = _stopVoiceInput;
 //
 // Enable precision mode by deploying cloudflare-worker/ and pasting its URL
 // below (or set localStorage 'acb-voice-proxy' to the URL — handy for testing).
-const _VOICE_PROXY_DEFAULT = '';   // ← paste your Worker URL, e.g. 'https://acb-voice.<subdomain>.workers.dev'
+const _VOICE_PROXY_DEFAULT = 'https://acb-voice.danielhttsai.workers.dev';   // Cloudflare Workers AI (Whisper) voice proxy — see cloudflare-worker/
 function _voiceProxyUrl() {
   try { return localStorage.getItem('acb-voice-proxy') || _VOICE_PROXY_DEFAULT; }
   catch(e) { return _VOICE_PROXY_DEFAULT; }
