@@ -2044,6 +2044,11 @@ function _stopVoiceInput() {
 // Removes vowels (most SR variation), normalises confusable consonants,
 // dedupes doubled letters caused by word-boundary insertion.
 function _phoneticKey(s) {
+  // Chinese transcript → key by the CJK characters themselves (the Latin-based
+  // phonetic squashing below doesn't apply), so the learning loop works for
+  // spoken Chinese brand names too.
+  const cjk = String(s).replace(/[^一-鿿]/g, '');
+  if (cjk.length >= 2) return 'zh:' + cjk;
   let p = String(s).toLowerCase().replace(/[^a-z]/g, '');
   if (!p) return '';
   p = p.replace(/ph/g, 'f');          // ph → f (phen, philip, etc.)
@@ -2120,6 +2125,46 @@ function _voiceMatchDrugs(transcript) {
       }
     }
   }
+
+  // Chinese brand-name matching (voice-only). Clinicians often SAY the Chinese
+  // trade name. BRANDS[].zh holds the full registered names (e.g. 適喘樂易得噴),
+  // but people usually say the short core (適喘樂) — so match on exact, OR the
+  // spoken form being a substantial substring of the registered name, OR a
+  // single-character difference (mild homophone/typo tolerance).
+  const txCjk = String(transcript || '').replace(/[^一-鿿]/g, '');
+  if (txCjk.length >= 2 && typeof BRANDS !== 'undefined') {
+    for (const atc in BRANDS) {
+      const zhList = (BRANDS[atc] && BRANDS[atc].zh) || [];
+      if (!zhList.length) continue;
+      const drug = DRUGS.find(d => d.atc === atc);
+      if (!drug) continue;
+      let best = 0;
+      for (const brand of zhList) {
+        const bz = String(brand).replace(/[^一-鿿]/g, '');
+        if (bz.length < 2) continue;
+        let sc = 0;
+        if (bz === txCjk) sc = 100;
+        else {
+          const shorter = bz.length <= txCjk.length ? bz : txCjk;
+          const longer  = bz.length <= txCjk.length ? txCjk : bz;
+          let cp = 0; const m = Math.min(bz.length, txCjk.length);   // shared leading chars (brand core)
+          while (cp < m && bz[cp] === txCjk[cp]) cp++;
+          if (shorter.length >= 3 && longer.includes(shorter) &&
+              shorter.length >= Math.ceil(longer.length / 2)) sc = 92;            // short brand ⊂ full brand (≥3 chars — 2-char overlaps are too noisy)
+          else if (cp >= 3) sc = 90;                                              // shared distinctive brand-core prefix; suffixes (錠/膠囊…) differ
+          else if (Math.min(bz.length, txCjk.length) >= 4 && _lev(bz, txCjk) <= 1) sc = 85; // 1 char off on a longer brand (homophone/typo)
+        }
+        if (sc > best) best = sc;
+      }
+      if (best > 0) {
+        const existing = matches.get(drug.atc);
+        if (!existing || best > existing.score) {
+          matches.set(drug.atc, { drug, score: best, source: txCjk });
+        }
+      }
+    }
+  }
+
   return [...matches.values()].sort((a, b) => b.score - a.score);
 }
 
