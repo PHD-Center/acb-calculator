@@ -449,12 +449,8 @@
               style="display:none;">
         <span>🎤</span> <span id="voiceBtnLabel">語音輸入</span>
       </button>
-      <label id="voicePrecisionWrap" class="text-xs text-slate-500 inline-flex items-center gap-1 cursor-pointer no-print" style="display:none;" title="雲端 AI 辨識(由本工具的 Cloudflare 代理執行 Whisper);辨識時語音會上傳轉寫,不另存">
-        <input type="checkbox" id="voicePrecisionToggle" onchange="_onPrecisionToggle()" style="accent-color:var(--brand-600);width:13px;height:13px;">
-        <span id="voicePrecisionLabel">🎯 精準語音(本機 AI)</span>
-      </label>
       <span id="ocrHintEl" class="text-xs text-slate-400">支援中英文藥歷影像(直接螢幕截圖效果最佳)</span>
-      <span id="voiceHintEl" class="text-xs text-slate-400" style="display:none;">說出藥名 · 勾「精準」改用本機 AI(更準、音訊不外傳)</span>
+      <span id="voiceHintEl" class="text-xs text-slate-400" style="display:none;">點 🎤 說出藥名 · 以雲端 AI 辨識(語音會上傳轉寫,不另存)</span>
       <input type="file" id="ocrFile" accept="image/*" capture="environment" style="display:none;" onchange="runOCR(this.files[0])">
     </div>
     <p id="methodNoteEl" class="text-xs text-slate-500 mt-2 italic">外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關)。</p>
@@ -900,12 +896,11 @@ const I18N = {
     ocrBtn: "拍照/上傳藥歷辨識",
     ocrHint: "支援中英文藥歷影像(直接螢幕截圖效果最佳)",
     voiceBtnLabel: "語音輸入",
-    voiceHint: "說出藥名 · 勾「精準」用雲端 AI 提高辨識(語音會上傳轉寫)",
+    voiceHint: "點 🎤 說出藥名 · 以雲端 AI 辨識(語音會上傳轉寫,不另存)",
     voiceListening: "聽取中…請說藥名(中文 / 英文 / 混講皆可)",
     voiceError: "辨識失敗",
     voiceHeard: "辨識到",
     voiceCancel: "取消",
-    voicePrecisionLabel: "🎯 精準語音(雲端 AI)",
     voiceDone: "完成 ✓",
     ocrModalTitle: "辨識結果",
     ocrLoadingHint: "第一次使用需下載辨識引擎(約 10 MB),稍候片刻",
@@ -1085,12 +1080,11 @@ const I18N = {
     ocrBtn: "Scan / upload medication list",
     ocrHint: "OCR for English/Chinese medication images (clear screenshots work best)",
     voiceBtnLabel: "Voice input",
-    voiceHint: "Say a drug name · tick Precision for cloud AI (audio is uploaded for transcription)",
+    voiceHint: "Tap 🎤 and say a drug name · transcribed by cloud AI (audio is uploaded, not stored)",
     voiceListening: "Listening… speak the drug name (English / Chinese / mixed)",
     voiceError: "Recognition failed",
     voiceHeard: "Heard",
     voiceCancel: "Cancel",
-    voicePrecisionLabel: "🎯 Precision (cloud AI)",
     voiceDone: "Done ✓",
     ocrModalTitle: "OCR results",
     ocrLoadingHint: "First use downloads the OCR engine (~10 MB). Please wait.",
@@ -1288,7 +1282,7 @@ function applyStaticLang() {
     addBtnEl: 'addBtn', inputHintEl: 'inputHint',
     ocrBtnLabel: 'ocrBtn', ocrHintEl: 'ocrHint',
     voiceBtnLabel: 'voiceBtnLabel', voiceHintEl: 'voiceHint', voiceCancelBtn: 'voiceCancel',
-    voicePrecisionLabel: 'voicePrecisionLabel', voiceDoneBtn: 'voiceDone',
+    voiceDoneBtn: 'voiceDone',
     ocrModalTitleEl: 'ocrModalTitle', ocrLoadingHintEl: 'ocrLoadingHint',
     ocrCancelEl: 'ocrCancel', ocrConfirmEl: 'ocrConfirm',
     methodNoteEl: 'methodNote',
@@ -2323,31 +2317,16 @@ function _canRecordAudio() {
 // "Precision" (cloud) voice is available only once a proxy URL is configured.
 function _canRunWhisper() { return !!_voiceProxyUrl() && _canRecordAudio(); }
 
-function _isPrecisionOn() {
-  const cb = document.getElementById('voicePrecisionToggle');
-  if (cb) return cb.checked;
-  try { return localStorage.getItem('acb-voice-precision') === '1'; } catch(e) { return false; }
-}
-function _onPrecisionToggle() {
-  const cb = document.getElementById('voicePrecisionToggle');
-  const on = !!(cb && cb.checked);
-  try { localStorage.setItem('acb-voice-precision', on ? '1' : '0'); } catch(e) {}
-  if (on) {
-    _showToast(LANG === 'zh'
-      ? '精準模式開啟 · 辨識時會把語音送到本工具的雲端做轉寫(不另存音訊)'
-      : 'Precision mode on · audio is sent to our cloud for transcription (not stored)');
-  }
-}
-
-// Router for the 🎤 button: precision → cloud Whisper, else browser STT, and if
-// the browser has no Web Speech API at all (e.g. Firefox) use cloud if enabled.
+// Single merged voice path: always prefer the cloud Whisper proxy (most
+// accurate for drug names); fall back to the browser's built-in STT only when
+// the proxy isn't configured/reachable or the browser can't record. Either way
+// the transcript runs through _processVoiceCandidates, so the personalised
+// learning + "did you mean?" picker apply regardless of which engine produced it.
 function _voiceButtonTap() {
-  if (_isPrecisionOn() && _canRunWhisper()) { _startWhisperVoice(); return; }
-  if (_hasVoiceSupport()) { _startVoiceInput(); return; }
-  if (_canRunWhisper()) { _startWhisperVoice(); return; }
+  if (_canRunWhisper()) { _startWhisperVoice(); return; }   // cloud Whisper (preferred)
+  if (_hasVoiceSupport()) { _startVoiceInput(); return; }   // browser STT fallback
 }
 window._voiceButtonTap = _voiceButtonTap;
-window._onPrecisionToggle = _onPrecisionToggle;
 
 function _whisperSetStatus(txt) {
   const s = document.getElementById('voiceStatus'); if (s) s.textContent = txt;
@@ -3519,15 +3498,6 @@ if (_hasVoiceSupport() || _canRunWhisper()) {
   const vh = document.getElementById('voiceHintEl');
   if (vb) vb.style.display = 'inline-flex';
   if (vh) vh.style.display = 'inline';
-}
-// Surface the on-device precision toggle (and restore the saved preference).
-if (_canRunWhisper()) {
-  const wrap = document.getElementById('voicePrecisionWrap');
-  if (wrap) wrap.style.display = 'inline-flex';
-  const cb = document.getElementById('voicePrecisionToggle');
-  try {
-    if (cb && localStorage.getItem('acb-voice-precision') === '1') cb.checked = true;
-  } catch(e) {}
 }
 _renderLikertButtons();
 _renderDemographics();
