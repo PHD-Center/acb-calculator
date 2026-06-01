@@ -52,12 +52,18 @@ browser console.)
 
 ## Tuning
 
-- **Higher accuracy:** in `worker.js` set
-  `MODEL = '@cf/openai/whisper-large-v3-turbo'`. (Its input format differs — it
-  takes base64 audio and supports an `initial_prompt`; adjust the `AI.run`
-  call accordingly if you switch.)
+- **Model:** defaults to `@cf/openai/whisper-large-v3-turbo` with an
+  `initial_prompt` of representative anticholinergic drug names (`DRUG_PROMPT`)
+  to bias decoding toward drug-name spelling. Edit `DRUG_PROMPT` to add names
+  you find are commonly misheard (keep it under ~220 tokens). To trade accuracy
+  for lower cost, switch `MODEL` to `@cf/openai/whisper` (the base model takes a
+  byte array instead of base64 — revert the `AI.run` call to
+  `{ audio: [...new Uint8Array(buf)] }`).
 - **Allowed origins:** edit `ALLOWED_ORIGINS` in `worker.js` if you host the
   app on another domain.
+- **Cost:** turbo uses more neurons per call than base, but a few-second clip is
+  still tiny and stays within the Workers AI daily free allocation for normal
+  use. Keep the dashboard usage limit set regardless.
 
 ## Privacy note for the app
 

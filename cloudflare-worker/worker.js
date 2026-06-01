@@ -9,6 +9,12 @@
 // does NOT use a third-party key — it calls Cloudflare's OWN Workers AI model
 // via the `AI` binding, so the only account involved is yours.
 //
+// Model: whisper-large-v3-turbo (more accurate than base whisper). It takes
+// base64 audio and supports `initial_prompt`, which we use to BIAS decoding
+// toward anticholinergic drug names — the single biggest accuracy lever for
+// this tool. The prompt is conditioning context only; it does not restrict the
+// output, and it does not need to list every drug.
+//
 // Privacy: audio is forwarded to Cloudflare Workers AI for transcription and is
 // not stored by this Worker. Disclose this in the app's privacy text.
 //
@@ -26,8 +32,19 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:8765',
 ];
 
-const MAX_BYTES = 5 * 1024 * 1024;            // ~5 MB (≈ 2.5 min of 16 kHz mono WAV)
-const MODEL = '@cf/openai/whisper';           // swap to '@cf/openai/whisper-large-v3-turbo' for higher accuracy
+const MAX_BYTES = 5 * 1024 * 1024;                       // ~5 MB (≈ 2.5 min of 16 kHz mono WAV)
+const MODEL = '@cf/openai/whisper-large-v3-turbo';
+
+// Vocabulary-biasing context. A representative spread of anticholinergic drug
+// names primes Whisper toward medical spelling so it stops "hearing" common
+// English words (Quetiapine → "quit typing"). Keep it well under ~220 tokens.
+const DRUG_PROMPT =
+  'Medication name. Examples: Amitriptyline, Nortriptyline, Imipramine, Doxepin, ' +
+  'Paroxetine, Quetiapine, Olanzapine, Clozapine, Chlorpromazine, Diphenhydramine, ' +
+  'Hydroxyzine, Chlorpheniramine, Cetirizine, Promethazine, Oxybutynin, Solifenacin, ' +
+  'Tolterodine, Trospium, Darifenacin, Fesoterodine, Scopolamine, Atropine, Tiotropium, ' +
+  'Ipratropium, Dicyclomine, Hyoscyamine, Benztropine, Trihexyphenidyl, Cyclobenzaprine, ' +
+  'Loperamide, Prednisolone, Furosemide, Digoxin, Warfarin, Theophylline, Ranitidine.';
 
 function corsHeaders(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -38,6 +55,17 @@ function corsHeaders(origin) {
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
+}
+
+// ArrayBuffer → base64 (chunked to avoid call-stack limits on large buffers).
+function toBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 0x8000; // 32 KB
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
 }
 
 export default {
@@ -65,8 +93,12 @@ export default {
     }
 
     try {
-      // @cf/openai/whisper takes the audio file bytes as an array of integers.
-      const result = await env.AI.run(MODEL, { audio: [...new Uint8Array(buf)] });
+      const result = await env.AI.run(MODEL, {
+        audio: toBase64(buf),        // turbo expects base64-encoded audio
+        task: 'transcribe',
+        language: 'en',              // drug generic names are English
+        initial_prompt: DRUG_PROMPT, // bias decoding toward drug-name spelling
+      });
       const text = (result && result.text ? String(result.text) : '').trim();
       return Response.json({ text }, { headers: corsHeaders(origin) });
     } catch (e) {
