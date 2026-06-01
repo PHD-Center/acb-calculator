@@ -449,7 +449,7 @@
               style="display:none;">
         <span>🎤</span> <span id="voiceBtnLabel">語音輸入</span>
       </button>
-      <label id="voicePrecisionWrap" class="text-xs text-slate-500 inline-flex items-center gap-1 cursor-pointer no-print" style="display:none;" title="本機 AI 語音模型,音訊不離開裝置;首次下載約 80MB(行動)/ 190MB(電腦),只需一次">
+      <label id="voicePrecisionWrap" class="text-xs text-slate-500 inline-flex items-center gap-1 cursor-pointer no-print" style="display:none;" title="雲端 AI 辨識(由本工具的 Cloudflare 代理執行 Whisper);辨識時語音會上傳轉寫,不另存">
         <input type="checkbox" id="voicePrecisionToggle" onchange="_onPrecisionToggle()" style="accent-color:var(--brand-600);width:13px;height:13px;">
         <span id="voicePrecisionLabel">🎯 精準語音(本機 AI)</span>
       </label>
@@ -468,9 +468,6 @@
         <div class="text-5xl mb-3 voice-pulse" aria-hidden="true">🎤</div>
         <p id="voiceStatus" class="text-base font-semibold text-slate-800">聽取中…請說藥名</p>
         <p id="voiceTranscript" class="text-sm text-slate-500 mt-3" style="min-height:1.5em;"></p>
-        <div id="voiceWhisperBar" style="display:none;height:5px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin:12px auto 0;max-width:240px;">
-          <div id="voiceWhisperBarFill" style="height:100%;width:0%;background:var(--brand-600);transition:width .2s;"></div>
-        </div>
         <div class="mt-4 flex gap-2 justify-center">
           <button type="button" id="voiceDoneBtn" onclick="_whisperFinishRecording()" style="display:none;background:var(--brand-600);color:#fff;" class="px-4 py-2 text-sm rounded-lg font-medium">完成 ✓</button>
           <button type="button" id="voiceCancelBtn" onclick="_stopVoiceInput()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition">取消</button>
@@ -903,12 +900,12 @@ const I18N = {
     ocrBtn: "拍照/上傳藥歷辨識",
     ocrHint: "支援中英文藥歷影像(直接螢幕截圖效果最佳)",
     voiceBtnLabel: "語音輸入",
-    voiceHint: "說出藥名 · 勾「精準」改用本機 AI(更準、音訊不外傳)",
+    voiceHint: "說出藥名 · 勾「精準」用雲端 AI 提高辨識(語音會上傳轉寫)",
     voiceListening: "聽取中…請說藥名(中文 / 英文 / 混講皆可)",
     voiceError: "辨識失敗",
     voiceHeard: "辨識到",
     voiceCancel: "取消",
-    voicePrecisionLabel: "🎯 精準語音(本機 AI)",
+    voicePrecisionLabel: "🎯 精準語音(雲端 AI)",
     voiceDone: "完成 ✓",
     ocrModalTitle: "辨識結果",
     ocrLoadingHint: "第一次使用需下載辨識引擎(約 10 MB),稍候片刻",
@@ -1088,12 +1085,12 @@ const I18N = {
     ocrBtn: "Scan / upload medication list",
     ocrHint: "OCR for English/Chinese medication images (clear screenshots work best)",
     voiceBtnLabel: "Voice input",
-    voiceHint: "Say a drug name · tick Precision for on-device AI (more accurate, no upload)",
+    voiceHint: "Say a drug name · tick Precision for cloud AI (audio is uploaded for transcription)",
     voiceListening: "Listening… speak the drug name (English / Chinese / mixed)",
     voiceError: "Recognition failed",
     voiceHeard: "Heard",
     voiceCancel: "Cancel",
-    voicePrecisionLabel: "🎯 Precision (on-device AI)",
+    voicePrecisionLabel: "🎯 Precision (cloud AI)",
     voiceDone: "Done ✓",
     ocrModalTitle: "OCR results",
     ocrLoadingHint: "First use downloads the OCR engine (~10 MB). Please wait.",
@@ -2288,26 +2285,29 @@ window._voicePickerNone = _voicePickerNone;
 window._startVoiceInput = _startVoiceInput;
 window._stopVoiceInput = _stopVoiceInput;
 
-// ===== Local Whisper precision voice (on-device AI — no audio leaves device) =====
-// Optional upgrade over the browser's built-in STT. The browser's cloud STT
-// frequently mangles drug names (Quetiapine → "quit typing", "play topic")
-// because its general-purpose language model has never heard them. Whisper,
-// running ENTIRELY in-browser via transformers.js (WebAssembly), transcribes
-// far more faithfully. Its transcript is then fed through the SAME
-// _processVoiceCandidates() pipeline (learned-lookup → fuzzy → phonetic →
-// picker → learning), so all of that is reused unchanged.
+// ===== Precision voice via Cloudflare Workers AI (Whisper) =====
+// The browser's built-in STT frequently mangles drug names (Quetiapine →
+// "quit typing", "play topic") because its general-purpose language model has
+// never heard them. "Precision" mode records a short clip and POSTs it to a
+// small Cloudflare Worker we deploy, which runs OpenAI Whisper on Cloudflare
+// Workers AI and returns the text. That transcript is then fed through the
+// SAME _processVoiceCandidates() pipeline (learned-lookup → fuzzy → phonetic →
+// picker → learning), all reused unchanged.
 //
-// Privacy: the model (~80 MB) downloads ONCE from a CDN and is cached by the
-// browser (Cache Storage). After that, NO audio and NO text is ever sent
-// anywhere — recognition is 100% local. This is the same trade-off as the
-// existing Tesseract OCR (downloads a model once, then runs locally).
-const _WHISPER_MODEL = 'Xenova/whisper-base';
-const _TF_CDN_URLS = [
-  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm',
-  'https://esm.sh/@huggingface/transformers@3',
-];
-let _whisper = null;            // ASR pipeline once ready
-let _whisperLoadPromise = null;
+// Privacy: in precision mode the recorded audio is sent to OUR Cloudflare proxy
+// → Cloudflare Workers AI for transcription (nothing is stored server-side). No
+// third-party API key is involved — the proxy calls Cloudflare's own model, so
+// users never configure anything. The DEFAULT mode still uses the browser's own
+// STT. See cloudflare-worker/ for the proxy source + one-time deploy steps.
+//
+// Enable precision mode by deploying cloudflare-worker/ and pasting its URL
+// below (or set localStorage 'acb-voice-proxy' to the URL — handy for testing).
+const _VOICE_PROXY_DEFAULT = '';   // ← paste your Worker URL, e.g. 'https://acb-voice.<subdomain>.workers.dev'
+function _voiceProxyUrl() {
+  try { return localStorage.getItem('acb-voice-proxy') || _VOICE_PROXY_DEFAULT; }
+  catch(e) { return _VOICE_PROXY_DEFAULT; }
+}
+
 let _whisperStream = null;      // active mic MediaStream
 let _whisperRecorder = null;    // MediaRecorder
 let _whisperChunks = [];
@@ -2315,12 +2315,14 @@ let _whisperVADTimer = null;
 let _whisperHardCap = null;
 let _whisperRecording = false;
 
-function _canRunWhisper() {
+function _canRecordAudio() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
             (window.AudioContext || window.webkitAudioContext) &&
-            typeof MediaRecorder !== 'undefined' &&
-            typeof WebAssembly !== 'undefined');
+            typeof MediaRecorder !== 'undefined');
 }
+// "Precision" (cloud) voice is available only once a proxy URL is configured.
+function _canRunWhisper() { return !!_voiceProxyUrl() && _canRecordAudio(); }
+
 function _isPrecisionOn() {
   const cb = document.getElementById('voicePrecisionToggle');
   if (cb) return cb.checked;
@@ -2332,14 +2334,13 @@ function _onPrecisionToggle() {
   try { localStorage.setItem('acb-voice-precision', on ? '1' : '0'); } catch(e) {}
   if (on) {
     _showToast(LANG === 'zh'
-      ? '精準模式開啟 · 首次下載語音模型(行動約 80MB / 電腦約 190MB,只需一次;音訊不外傳)'
-      : 'Precision mode on · first use downloads the voice model (~80MB mobile / ~190MB desktop, one-time; audio stays local)');
-    _loadWhisper().then(() => _whisperWarmup()).catch(() => {});   // download + warm in background (they just opted in)
+      ? '精準模式開啟 · 辨識時會把語音送到本工具的雲端做轉寫(不另存音訊)'
+      : 'Precision mode on · audio is sent to our cloud for transcription (not stored)');
   }
 }
 
-// Router for the 🎤 button: precision → Whisper, else browser STT, and if the
-// browser has no Web Speech API at all (e.g. Firefox) fall back to Whisper.
+// Router for the 🎤 button: precision → cloud Whisper, else browser STT, and if
+// the browser has no Web Speech API at all (e.g. Firefox) use cloud if enabled.
 function _voiceButtonTap() {
   if (_isPrecisionOn() && _canRunWhisper()) { _startWhisperVoice(); return; }
   if (_hasVoiceSupport()) { _startVoiceInput(); return; }
@@ -2350,96 +2351,6 @@ window._onPrecisionToggle = _onPrecisionToggle;
 
 function _whisperSetStatus(txt) {
   const s = document.getElementById('voiceStatus'); if (s) s.textContent = txt;
-}
-function _whisperSetBar(pct) {
-  const bar = document.getElementById('voiceWhisperBar');
-  const fill = document.getElementById('voiceWhisperBarFill');
-  if (!bar || !fill) return;
-  if (pct == null) { bar.style.display = 'none'; return; }
-  bar.style.display = 'block';
-  fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-}
-function _whisperProgress(p) {
-  // transformers.js emits {status:'progress', file, loaded, total, progress}
-  if (p && p.status === 'progress' && p.total) {
-    const pct = Math.round((p.loaded / p.total) * 100);
-    _whisperSetStatus((LANG === 'zh' ? '下載語音模型… ' : 'Downloading voice model… ') + pct + '%');
-    _whisperSetBar(pct);
-  }
-}
-
-let _whisperDevice = null;       // 'webgpu' | 'wasm' — which backend is active
-let _whisperPipelineFn = null;   // transformers.js pipeline() fn, cached across reloads
-
-// Import transformers.js from CDN once (tries jsdelivr +esm, then esm.sh).
-async function _getTransformers() {
-  if (_whisperPipelineFn) return _whisperPipelineFn;
-  let TF = null, lastErr = null;
-  for (const url of _TF_CDN_URLS) {
-    try { TF = await import(url); if (TF) break; }
-    catch(e) { lastErr = e; console.warn('transformers.js import failed from', url, e); }
-  }
-  if (!TF) throw lastErr || new Error('transformers.js failed to load');
-  const pipeline = TF.pipeline || (TF.default && TF.default.pipeline);
-  const env = TF.env || (TF.default && TF.default.env);
-  if (env) { try { env.allowLocalModels = false; } catch(e) {} }
-  if (!pipeline) throw new Error('transformers.js: pipeline export missing');
-  _whisperPipelineFn = pipeline;
-  return pipeline;
-}
-
-// Build the ASR pipeline. Prefer WebGPU (sub-second on capable desktops),
-// fall back to WebAssembly (works everywhere, just slower). Pass forceWasm to
-// rebuild on wasm if a WebGPU run misbehaves. Model files are cached by the
-// browser, so a rebuild reuses the already-downloaded weights.
-async function _loadWhisper(forceWasm) {
-  if (_whisper && !(forceWasm && _whisperDevice === 'webgpu')) return _whisper;
-  if (_whisperLoadPromise && !forceWasm) return _whisperLoadPromise;
-  _whisperLoadPromise = (async () => {
-    const pipeline = await _getTransformers();
-    // Backend/precision selection (verified combos only):
-    //  • Desktop GPU → WebGPU fp32: ~2 s/utterance but a heavier (~190 MB) model.
-    //    (WebGPU + int8/fp16 whisper stalls in onnxruntime-web, so fp32 only.)
-    //  • Everything else (incl. mobile) → WASM int8 (q8): ~80 MB, runs anywhere,
-    //    a few seconds/utterance. Skipping WebGPU on mobile also saves data and
-    //    avoids flaky mobile GPU backends.
-    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
-                     (navigator.userAgentData && navigator.userAgentData.mobile);
-    const attempts = [];
-    if (!forceWasm && !isMobile && navigator.gpu) attempts.push({ device: 'webgpu' });
-    attempts.push({ device: 'wasm', dtype: 'q8' });
-    attempts.push({ device: 'wasm' });
-    let pipe = null, lastErr = null;
-    for (const opt of attempts) {
-      try {
-        pipe = await pipeline('automatic-speech-recognition', _WHISPER_MODEL,
-          { ...opt, progress_callback: _whisperProgress });
-        _whisperDevice = opt.device;
-        break;
-      } catch(e) { lastErr = e; console.warn('Whisper load attempt failed', opt, e); }
-    }
-    if (!pipe) throw lastErr || new Error('Whisper pipeline creation failed');
-    _whisper = pipe;
-    return pipe;
-  })();
-  _whisperLoadPromise.catch(() => { _whisperLoadPromise = null; });
-  return _whisperLoadPromise;
-}
-
-let _whisperWarmPromise = null;
-let _whisperWarmed = false;
-// The first WebGPU run triggers shader compilation (several seconds). Run a
-// throwaway pass in the BACKGROUND right after the model loads (e.g. when the
-// user ticks the precision toggle) so their first real utterance is fast.
-function _whisperWarmup() {
-  if (_whisperWarmed || !_whisper || _whisperWarmPromise) return _whisperWarmPromise;
-  _whisperWarmPromise = (async () => {
-    try {
-      await _whisper(new Float32Array(16000), { language: 'en', task: 'transcribe' });
-      _whisperWarmed = true;
-    } catch(e) { /* best-effort */ }
-  })();
-  return _whisperWarmPromise;
 }
 
 async function _startWhisperVoice() {
@@ -2452,19 +2363,7 @@ async function _startWhisperVoice() {
   if (listeningEl) listeningEl.style.display = 'block';
   if (pickerEl) pickerEl.style.display = 'none';
   if (transcript) transcript.textContent = '';
-  _whisperSetBar(null);
-  _whisperSetStatus(LANG === 'zh' ? '載入語音模型…' : 'Loading voice model…');
-
-  let pipe;
-  try { pipe = await _loadWhisper(); }
-  catch(e) {
-    console.warn('Whisper load failed:', e);
-    _whisperSetStatus(LANG === 'zh' ? '模型載入失敗,改用瀏覽器辨識' : 'Model failed — using browser STT');
-    setTimeout(() => { _stopVoiceInput(); if (_hasVoiceSupport()) _startVoiceInput(); }, 1300);
-    return;
-  }
-  if (modal.classList.contains('hidden')) return;   // user cancelled during load
-  _whisperSetBar(null);
+  _whisperSetStatus(LANG === 'zh' ? '準備麥克風…' : 'Preparing microphone…');
 
   try {
     _whisperStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2481,7 +2380,6 @@ async function _startWhisperVoice() {
 function _whisperBeginRecording() {
   _whisperChunks = [];
   _whisperRecording = true;
-  _whisperSetBar(null);
   _whisperSetStatus(LANG === 'zh' ? '錄音中…講完藥名,點「完成」或稍停即可'
                                   : 'Recording… say the drug name, then tap Done or pause');
   const doneBtn = document.getElementById('voiceDoneBtn');
@@ -2547,29 +2445,17 @@ async function _whisperOnRecordingStopped() {
     _whisperStream = null;
     return;
   }
-  _whisperSetStatus(LANG === 'zh' ? '辨識中…(本機 AI,可能需幾秒)' : 'Transcribing… (on-device AI, a few seconds)');
+  _whisperSetStatus(LANG === 'zh' ? '辨識中…(雲端處理)' : 'Transcribing… (cloud)');
   try {
     const blob = new Blob(_whisperChunks, { type: (_whisperRecorder && _whisperRecorder.mimeType) || 'audio/webm' });
-    const audio = await _whisperBlobTo16k(blob);
+    // Decode → 16 kHz mono → WAV (a universally-decodable container for the proxy).
+    const pcm = await _whisperBlobTo16k(blob);
     _whisperStream = null;
-    // If a background warmup is still running, wait for it so we don't issue two
-    // concurrent inferences on the same pipeline.
-    if (_whisperWarmPromise) { try { await _whisperWarmPromise; } catch(e) {} }
-    let out;
-    try {
-      out = await _whisper(audio, { language: 'en', task: 'transcribe' });
-    } catch(infErr) {
-      // A WebGPU run can occasionally fail at inference time — rebuild on the
-      // (slower but universal) WASM backend and retry once.
-      if (_whisperDevice === 'webgpu') {
-        console.warn('WebGPU inference failed, falling back to WASM:', infErr);
-        _whisperSetStatus(LANG === 'zh' ? '切換相容模式…' : 'Switching to compatibility mode…');
-        _whisper = null; _whisperLoadPromise = null;
-        const pipe = await _loadWhisper(true);
-        out = await pipe(audio, { language: 'en', task: 'transcribe' });
-      } else { throw infErr; }
-    }
-    const text = (out && (out.text || (Array.isArray(out) && out[0] && out[0].text))) || '';
+    const wav = _pcmToWav(pcm, 16000);
+    const resp = await fetch(_voiceProxyUrl(), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+    if (!resp.ok) throw new Error('proxy HTTP ' + resp.status);
+    const data = await resp.json();
+    const text = (data && data.text) || '';
     // Strip Whisper's non-speech annotations: "(chimes)", "[BLANK_AUDIO]", "♪"
     const clean = String(text).replace(/\([^)]*\)|\[[^\]]*\]|[♪♫]/g, ' ').replace(/\s+/g, ' ').trim();
     if (modal && modal.classList.contains('hidden')) return;
@@ -2581,10 +2467,11 @@ async function _whisperOnRecordingStopped() {
     }
     _processVoiceCandidates([clean]);   // shared pipeline: picker + learning included
   } catch(e) {
-    console.warn('Whisper transcribe failed:', e);
+    console.warn('Cloud transcription failed:', e);
     _whisperStream = null;
-    _whisperSetStatus(LANG === 'zh' ? '辨識失敗,請再試一次' : 'Transcription failed — try again');
-    setTimeout(_stopVoiceInput, 1500);
+    // Fall back to the browser's own STT so voice still works if the proxy is down
+    _whisperSetStatus(LANG === 'zh' ? '雲端辨識失敗,改用瀏覽器辨識' : 'Cloud failed — using browser STT');
+    setTimeout(() => { _stopVoiceInput(); if (_hasVoiceSupport()) _startVoiceInput(); }, 1300);
   }
 }
 
@@ -2607,6 +2494,26 @@ async function _whisperBlobTo16k(blob) {
   return rendered.getChannelData(0);
 }
 
+// Wrap a Float32 PCM buffer in a 16-bit mono WAV container (what the proxy posts).
+function _pcmToWav(samples, sampleRate) {
+  const n = samples.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const dv = new DataView(buf);
+  const ws = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE');
+  ws(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sampleRate, true); dv.setUint32(28, sampleRate * 2, true);
+  dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  ws(36, 'data'); dv.setUint32(40, n * 2, true);
+  let off = 44;
+  for (let i = 0; i < n; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    dv.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
 function _whisperAbort() {
   _whisperRecording = false;
   if (_whisperHardCap) { clearTimeout(_whisperHardCap); _whisperHardCap = null; }
@@ -2617,7 +2524,6 @@ function _whisperAbort() {
   _whisperChunks = [];
   const doneBtn = document.getElementById('voiceDoneBtn');
   if (doneBtn) doneBtn.style.display = 'none';
-  _whisperSetBar(null);
 }
 window._startWhisperVoice = _startWhisperVoice;
 window._whisperFinishRecording = _whisperFinishRecording;

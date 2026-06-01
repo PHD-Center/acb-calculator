@@ -1,0 +1,7 @@
+name = "acb-voice"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Cloudflare Workers AI binding — gives the Worker access to env.AI.run(...)
+[ai]
+binding = "AI"

@@ -8,3 +8,7 @@
 !phdc-logo.png
 !PHD_LOGO+abv.Eng.NAME_v1.png
 !.gitignore
+
+# Allow the voice-proxy Cloudflare Worker source (no secrets in here)
+!cloudflare-worker
+!cloudflare-worker/*
