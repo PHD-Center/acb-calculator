@@ -96,8 +96,11 @@ export default {
       const result = await env.AI.run(MODEL, {
         audio: toBase64(buf),        // turbo expects base64-encoded audio
         task: 'transcribe',
-        language: 'en',              // drug generic names are English
-        initial_prompt: DRUG_PROMPT, // bias decoding toward drug-name spelling
+        // language omitted → Whisper auto-detects, so it handles BOTH spoken
+        // English generic names and spoken Chinese brand names. The English
+        // DRUG_PROMPT still biases drug-name spelling for the common English
+        // case without preventing Chinese detection of clearly-Chinese audio.
+        initial_prompt: DRUG_PROMPT,
       });
       const text = (result && result.text ? String(result.text) : '').trim();
       return Response.json({ text }, { headers: corsHeaders(origin) });
