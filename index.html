@@ -571,7 +571,7 @@
 
   <!-- Print / Export button (hidden on print itself) -->
   <div id="printBtnWrap" class="hidden mb-3" style="text-align:right;">
-    <button type="button" id="printBtn" onclick="window.print()"
+    <button type="button" id="printBtn" onclick="_printThenFeedback()"
             class="inline-flex items-center gap-1.5 px-3 py-2 border border-indigo-300 bg-indigo-50 text-indigo-800 rounded-lg text-xs font-medium hover:bg-indigo-100 transition no-print">
       <span>🖨️</span> <span id="printBtnLabel">列印 / 匯出 PDF</span>
     </button>
@@ -2767,10 +2767,11 @@ async function _submitFeedback(ev) {
       statusEl.textContent = t('fbSuccess');
       statusEl.style.color = '#16a34a';
       form.reset();
-      // Hide form after success so user knows we received it
+      try { sessionStorage.setItem('acb-fb-submitted', '1'); } catch(e) {}   // don't re-prompt after a submit
+      // Hide the panel after success so the user knows we received it
       setTimeout(() => {
         const card = document.getElementById('feedbackCard');
-        if (card) card.open = false;
+        if (card) card.classList.add('hidden');
       }, 2500);
     } else {
       throw new Error('HTTP ' + resp.status);
@@ -2786,6 +2787,32 @@ async function _submitFeedback(ev) {
   return false;
 }
 window._submitFeedback = _submitFeedback;
+
+// ── Open the feedback panel at the highest-intent moment: right after the user
+// exports/prints the report. It's the same closeable panel (✕ / backdrop / ESC),
+// so it's proactive but NOT forced; shown at most once per session and skipped
+// entirely once they've submitted.
+let _fbPromptAfterPrint = false;
+function _printThenFeedback() {
+  _fbPromptAfterPrint = true;
+  window.print();
+  // Fallback for browsers where 'afterprint' is unreliable (some mobile Safari)
+  setTimeout(() => { if (_fbPromptAfterPrint) _openFeedbackAfterPrint(); }, 1200);
+}
+function _openFeedbackAfterPrint() {
+  if (!_fbPromptAfterPrint) return;   // only following our own export button
+  _fbPromptAfterPrint = false;
+  try {
+    if (sessionStorage.getItem('acb-fb-submitted') === '1') return;   // already gave feedback
+    if (sessionStorage.getItem('acb-fb-prompted') === '1') return;    // auto-open at most once per session
+    sessionStorage.setItem('acb-fb-prompted', '1');
+  } catch(e) {}
+  if (typeof selected !== 'undefined' && !selected.length) return;
+  const card = document.getElementById('feedbackCard');
+  if (card) card.classList.remove('hidden');
+}
+window.addEventListener('afterprint', _openFeedbackAfterPrint);
+window._printThenFeedback = _printThenFeedback;
 
 // Lazy-load chi_tra worker — only invoked when English pass returns 0 drugs.
 // Adds ~3 s on Chinese-only images, free on English images.
