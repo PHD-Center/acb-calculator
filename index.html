@@ -171,6 +171,11 @@
     background: transparent;  /* no backdrop — calculator stays visible */
     animation: fbSlideIn .25s ease-out;
   }
+  /* The `.hidden` utility is a class (specificity 0,1,0) and cannot override the
+     #feedbackCard ID rule above (1,0,0) — so hide must be expressed at >= ID
+     specificity, with !important to also win over the animation. Without this
+     the ✕ / backdrop / ESC toggles `.hidden` but the panel never disappears. */
+  #feedbackCard.hidden { display: none !important; }
   @keyframes fbSlideIn {
     from { transform: translateX(100%); }
     to   { transform: translateX(0); }
