@@ -35,10 +35,40 @@ the URL:
 const _VOICE_PROXY_DEFAULT = 'https://acb-voice.<your-subdomain>.workers.dev';
 ```
 
-Once set, the **🎯 精準語音** toggle appears next to the 🎤 button. (For quick
-testing without editing the file you can instead run
-`localStorage.setItem('acb-voice-proxy', 'https://…workers.dev')` in the
-browser console.)
+Voice input then uses the cloud Whisper proxy (falling back to the browser's
+built-in STT if the proxy is unreachable). For quick testing without editing the
+file you can instead run `localStorage.setItem('acb-voice-proxy',
+'https://…workers.dev')` in the browser console.
+
+## Shared voice learning (optional)
+
+Lets the tool get more accurate from real usage automatically: whenever any user
+confirms a drug from the "did you mean?" picker, the mapping
+`phonetic(what STT heard) → drug` is pooled across **all** users (the speech
+model isn't changed — only this lookup grows). Backed by a Workers KV namespace;
+the `/corrections` endpoint serves trusted mappings (GET) and records votes
+(POST). **Without KV the endpoints simply no-op**, so this is fully optional.
+
+To enable:
+
+```bash
+cd cloudflare-worker
+wrangler kv namespace create VOICE_KV   # prints an id
+```
+
+Then in `wrangler.toml` uncomment the `[[kv_namespaces]]` block and paste the id:
+
+```toml
+[[kv_namespaces]]
+binding = "VOICE_KV"
+id = "the-printed-id"
+```
+
+Redeploy (`wrangler deploy`). Safeguards: a mapping is only served after
+`TRUST_THRESHOLD` (default 2) agreeing votes, keys can only point to a drug name
+the client supplies, and shared mappings only **pre-fill** the picker (the user
+still confirms) — so a bad vote can't silently add a wrong drug. Tune
+`TRUST_THRESHOLD` / `MAX_KEYS` in `worker.js`.
 
 ## Cost & abuse protection — read this
 

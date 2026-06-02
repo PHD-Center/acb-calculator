@@ -50,7 +50,7 @@ function corsHeaders(origin) {
   const allow = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
@@ -68,20 +68,85 @@ function toBase64(buf) {
   return btoa(binary);
 }
 
+// ── Shared "voice learning" dictionary (Workers KV) ──────────────────────────
+// Maps a phonetic key (what speech-to-text heard) → the drug users actually
+// picked for it, pooled across EVERYONE. GET returns the trusted mappings; POST
+// casts one vote. This is how the tool "trains" from real usage with nobody
+// having to do anything special — the model itself isn't changed, only the
+// sound→drug lookup. Requires a KV namespace bound as VOICE_KV (see
+// wrangler.toml). If it's unbound, these endpoints no-op so transcription still
+// works. Damage from bad votes is limited: keys can only map to a drug name the
+// client sends, mappings need TRUST_THRESHOLD agreeing votes before they're
+// served, and they only ever pre-fill the "did you mean?" picker (user confirms).
+const DICT_KEY = 'voice-dict';
+const TRUST_THRESHOLD = 2;     // a (key→drug) mapping is shared once ≥2 votes agree
+const MAX_KEYS = 4000;         // cap dictionary size
+
+async function handleCorrections(request, env, origin) {
+  const H = corsHeaders(origin);
+  if (!env.VOICE_KV) return Response.json({}, { headers: H });   // KV not configured → no-op
+
+  if (request.method === 'GET') {
+    const raw = await env.VOICE_KV.get(DICT_KEY);
+    const dict = raw ? JSON.parse(raw) : {};
+    const out = {};
+    for (const key in dict) {
+      let bestAtc = null, bestName = null, bestN = 0;
+      for (const atc in dict[key]) {
+        const n = dict[key][atc].n || 0;
+        if (n > bestN) { bestN = n; bestAtc = atc; bestName = dict[key][atc].name; }
+      }
+      if (bestAtc && bestN >= TRUST_THRESHOLD) out[key] = { atc: bestAtc, name: bestName };
+    }
+    return Response.json(out, { headers: H });
+  }
+
+  if (request.method === 'POST') {
+    let body;
+    try { body = await request.json(); } catch (e) { return Response.json({ error: 'bad json' }, { status: 400, headers: H }); }
+    const key = String(body.key || '').slice(0, 64);
+    const atc = String(body.atc || '').slice(0, 16);
+    const name = String(body.name || '').slice(0, 80);
+    if (!key || !atc) return Response.json({ error: 'missing key/atc' }, { status: 400, headers: H });
+
+    const raw = await env.VOICE_KV.get(DICT_KEY);
+    const dict = raw ? JSON.parse(raw) : {};
+    if (!dict[key] && Object.keys(dict).length >= MAX_KEYS) {
+      return Response.json({ ok: false, full: true }, { headers: H });   // dictionary at cap
+    }
+    if (!dict[key]) dict[key] = {};
+    if (!dict[key][atc]) dict[key][atc] = { name, n: 0 };
+    dict[key][atc].n++;
+    dict[key][atc].name = name;
+    await env.VOICE_KV.put(DICT_KEY, JSON.stringify(dict));
+    return Response.json({ ok: true }, { headers: H });
+  }
+
+  return new Response('Method Not Allowed', { status: 405, headers: H });
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
+    const url = new URL(request.url);
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
-    if (request.method !== 'POST') {
-      return new Response('Method Not Allowed', { status: 405, headers: corsHeaders(origin) });
-    }
     // Reject obviously-foreign origins (browsers always send Origin cross-site).
     if (origin && !ALLOWED_ORIGINS.includes(origin)) {
       return new Response('Forbidden origin', { status: 403, headers: corsHeaders(origin) });
+    }
+
+    // Shared voice-learning dictionary (GET = read, POST = vote)
+    if (url.pathname.replace(/\/+$/, '') === '/corrections') {
+      return handleCorrections(request, env, origin);
+    }
+
+    // Otherwise: speech-to-text (POST a 16 kHz mono WAV)
+    if (request.method !== 'POST') {
+      return new Response('Method Not Allowed', { status: 405, headers: corsHeaders(origin) });
     }
 
     const buf = await request.arrayBuffer();

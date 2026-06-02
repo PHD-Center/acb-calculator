@@ -2567,10 +2567,14 @@ function _saveVoiceCorrection(transcripts, drug) {
       };
     }
     localStorage.setItem('acb-voice-corrections', JSON.stringify(data));
+    // Contribute each confirmed mapping to the shared cross-user dictionary
+    for (const key of set) _postSharedCorrection(key, drug);
   } catch(e) { /* localStorage full or disabled — silently skip */ }
 }
 function _lookupVoiceCorrection(transcripts) {
-  const data = _getVoiceCorrections();
+  // Merge shared (cross-user) + local; local wins on conflict (a user's own pick
+  // is the most trusted signal for them).
+  const data = Object.assign({}, _sharedCorrections, _getVoiceCorrections());
   if (!Object.keys(data).length) return null;
   let best = null, bestScore = 0;
   for (const tr of (Array.isArray(transcripts) ? transcripts : [transcripts])) {
@@ -2601,6 +2605,52 @@ function _clearVoiceCorrections() {
 }
 window._getVoiceCorrections = _getVoiceCorrections;
 window._clearVoiceCorrections = _clearVoiceCorrections;
+
+// ── Shared voice learning (cross-user, via the Cloudflare Worker) ────────────
+// The per-user corrections above live in localStorage. On top of them we pull a
+// SHARED dictionary from the Worker's /corrections endpoint so everyone benefits
+// from everyone's confirmed picks, and we POST each confirmed pick back as a
+// vote. The speech model itself isn't trained — only the sound→drug lookup grows
+// from real usage, automatically, with nobody needing to do anything special.
+let _sharedCorrections = {};
+let _sharedLoaded = false;
+function _correctionsUrl() {
+  const base = (typeof _voiceProxyUrl === 'function') ? _voiceProxyUrl() : '';
+  return base ? base.replace(/\/+$/, '') + '/corrections' : '';
+}
+async function _loadSharedCorrections() {
+  if (_sharedLoaded) return;
+  _sharedLoaded = true;
+  // Warm from a short-lived local cache first (avoid refetching every visit)
+  try {
+    const c = JSON.parse(localStorage.getItem('acb-voice-shared') || 'null');
+    if (c && c.dict && c.ts && (Date.now() - c.ts) < 86400000) _sharedCorrections = c.dict;
+  } catch(e) {}
+  const url = _correctionsUrl();
+  if (!url) return;
+  try {
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (resp.ok) {
+      const raw = await resp.json();
+      const norm = {};
+      for (const k in raw) if (raw[k] && raw[k].atc) norm[k] = { atc: raw[k].atc, name: raw[k].name, count: 2 };
+      _sharedCorrections = norm;
+      try { localStorage.setItem('acb-voice-shared', JSON.stringify({ ts: Date.now(), dict: norm })); } catch(e) {}
+    }
+  } catch(e) { /* offline / KV not configured — fall back to local-only */ }
+}
+function _postSharedCorrection(key, drug) {
+  const url = _correctionsUrl();
+  if (!url || !key || key.length < 2 || !drug) return;
+  try {
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, atc: drug.atc, name: drug.name })
+    }).catch(() => {});
+  } catch(e) {}
+}
+window._loadSharedCorrections = _loadSharedCorrections;
 
 function _manageVoiceCorrections() {
   const data = _getVoiceCorrections();
@@ -3581,6 +3631,7 @@ if (_hasVoiceSupport() || _canRunWhisper()) {
   if (vb) vb.style.display = 'inline-flex';
   if (vh) vh.style.display = 'inline';
 }
+_loadSharedCorrections();   // pull the cross-user voice dictionary in the background
 _renderLikertButtons();
 _renderDemographics();
 setLang(LANG);
