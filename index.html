@@ -290,6 +290,17 @@
   .fb-likert input[type=radio]:checked + .fb-likert-num { color: #2e5a52; font-weight: 700; }
   .fb-likert label:has(input:checked) { border-color: #2e5a52; background: #ebf3f0; color: #21443e; }
   .fb-likert-num { font-size: 13px; font-weight: 600; color: #64748b; }
+  /* One-tap micro rating in the nudge — same 5-point scale/anchors as Q2 */
+  .fb-quick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 8px; }
+  .fb-quick button {
+    min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    padding: 7px 2px; border: 1px solid #cbd5e1; border-radius: 8px;
+    cursor: pointer; transition: all .15s; background: #fff; font-family: inherit;
+    text-align: center; font-size: 9.5px; line-height: 1.2; color: #475569; word-break: keep-all;
+  }
+  .fb-quick button:hover { border-color: #3d736a; background: #ebf3f0; }
+  .fb-quick button.sel { border-color: #2e5a52; background: #ebf3f0; color: #21443e; }
+  .fb-quick button.sel .fb-likert-num { color: #2e5a52; }
 
   /* ===== Splash screen (PHDc logo flash on first paint) ===== */
   #splashScreen {
@@ -741,10 +752,12 @@
         <div class="text-2xl flex-shrink-0" aria-hidden="true">💡</div>
         <div class="flex-1 min-w-0">
           <p id="fbNudgeTitle" class="text-sm font-semibold text-slate-800">幫助我們改進這個工具</p>
-          <p id="fbNudgeDesc" class="text-xs text-slate-600 mt-1 leading-relaxed">30 秒匿名問卷,回饋會用於工具優化與後續研究。完全可選。</p>
+          <p id="fbQuickQEl" class="text-xs text-slate-700 mt-1 leading-relaxed">本工具的計算結果有助於我評估病人的抗膽鹼負擔。</p>
+          <div id="fbQuickScale" class="fb-quick" aria-label="quick rating"></div>
+          <p id="fbQuickThanksEl" class="text-xs mt-2" style="display:none;color:#16a34a;"></p>
           <button type="button" onclick="document.getElementById('feedbackCard').classList.remove('hidden');"
                   class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-medium hover:border-slate-500 hover:text-slate-900 transition">
-            <span>📝</span> <span id="fbNudgeBtnLabel">填寫回饋</span>
+            <span>📝</span> <span id="fbNudgeBtnLabel">填寫完整回饋(選填)</span>
           </button>
         </div>
         <button type="button" onclick="_dismissFbNudge()" aria-label="Dismiss"
@@ -986,7 +999,8 @@ const I18N = {
     fbFloatBtnLabel: "給我們回饋",
     fbNudgeTitle: "幫助我們改進這個工具",
     fbNudgeDesc: "30 秒匿名問卷,回饋會用於工具優化與後續研究。完全可選。",
-    fbNudgeBtnLabel: "填寫回饋",
+    fbNudgeBtnLabel: "填寫完整回饋(選填)",
+    fbQuickThanks: "謝謝!想多回答幾題嗎?(選填)",
     fbDemogTitle: "基本資料(用於分組分析)",
     fbSurveyTitle: "使用體驗評估",
     fbDemogRole: "角色",
@@ -1170,7 +1184,8 @@ const I18N = {
     fbFloatBtnLabel: "Send feedback",
     fbNudgeTitle: "Help us improve this tool",
     fbNudgeDesc: "A 30-second anonymous survey. Responses inform tool improvements and future research. Completely optional.",
-    fbNudgeBtnLabel: "Give feedback",
+    fbNudgeBtnLabel: "Full survey (optional)",
+    fbQuickThanks: "Thanks! Want to answer a few more? (optional)",
     fbDemogTitle: "About you (for stratified analysis)",
     fbSurveyTitle: "Your experience",
     fbDemogRole: "Role",
@@ -1303,7 +1318,7 @@ function applyStaticLang() {
     fbQ1El: 'fbQ1', fbQ2El: 'fbQ2', fbQ3El: 'fbQ3', fbQ4El: 'fbQ4', fbQ5El: 'fbQ5', fbQ6El: 'fbQ6',
     fbSubmitLabel: 'fbSubmitLabel',
     fbFloatBtnLabel: 'fbFloatBtnLabel', fbOpenBtnLabel: 'fbFloatBtnLabel',
-    fbNudgeTitle: 'fbNudgeTitle', fbNudgeDesc: 'fbNudgeDesc', fbNudgeBtnLabel: 'fbNudgeBtnLabel',
+    fbNudgeTitle: 'fbNudgeTitle', fbNudgeDesc: 'fbNudgeDesc', fbNudgeBtnLabel: 'fbNudgeBtnLabel', fbQuickQEl: 'fbQ2', fbQuickThanksEl: 'fbQuickThanks',
     fbDemogTitleEl: 'fbDemogTitle', fbSurveyTitleEl: 'fbSurveyTitle',
     fbDemogRoleEl: 'fbDemogRole', fbDemogYearsEl: 'fbDemogYears', fbDemogSpecEl: 'fbDemogSpec',
     evidenceTitleEl: 'evidenceTitle', evExpandEl: 'evExpand',
@@ -2724,6 +2739,64 @@ function _refreshLikertLabels() {
   });
 }
 
+// One-tap micro rating in the nudge — the SAME 5-point scale as survey Q2, so a
+// tap pools directly with the full survey (and pre-fills Q2 if they continue).
+// Tapping submits a lightweight "quick" response so even drive-by users leave
+// data; the full survey stays optional.
+function _renderQuickScale() {
+  const el = document.getElementById('fbQuickScale');
+  if (!el || el.dataset.rendered === '1') return;
+  for (let v = 1; v <= 5; v++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.v = String(v);
+    b.onclick = () => _quickRate(v);
+    const num = document.createElement('span');
+    num.className = 'fb-likert-num'; num.textContent = v;
+    const txt = document.createElement('span');
+    txt.setAttribute('data-likert-anchor', String(v));   // so _refreshLikertLabels translates it too
+    txt.textContent = t('fbLikert' + v);
+    b.appendChild(num); b.appendChild(txt);
+    el.appendChild(b);
+  }
+  el.dataset.rendered = '1';
+}
+
+let _quickRated = false;
+function _quickRate(n) {
+  if (_quickRated) return;
+  _quickRated = true;
+  document.querySelectorAll('#fbQuickScale button').forEach(b => b.classList.toggle('sel', b.dataset.v === String(n)));
+  _submitQuickRating(n);
+  // Pre-select Q2 in the full survey so continuing never re-asks the same item
+  const q2 = document.querySelector('#fbForm input[name="q2"][value="' + n + '"]');
+  if (q2) q2.checked = true;
+  const th = document.getElementById('fbQuickThanksEl');
+  if (th) { th.textContent = t('fbQuickThanks'); th.style.display = 'block'; }
+  try { sessionStorage.setItem('acb-fb-quickrated', '1'); } catch(e) {}
+}
+
+// Fire-and-forget a minimal "quick" submission (one rating + context + session
+// id). Tagged response_type=quick so it can be told apart from / pooled with
+// full submissions by session_id during analysis.
+function _submitQuickRating(n) {
+  try {
+    const fd = new FormData();
+    fd.append('response_type', 'quick');
+    fd.append('q2', String(n));
+    const totEl = document.getElementById('total-ACB');
+    fd.append('ctx_acb_total', totEl ? totEl.textContent : '');
+    fd.append('ctx_drug_count', (typeof selected !== 'undefined') ? selected.length : 0);
+    fd.append('ctx_drug_list', (typeof selected !== 'undefined') ? selected.map(d => d.name).join(' | ') : '');
+    fd.append('ctx_language', LANG);
+    fd.append('ctx_timestamp', new Date().toISOString());
+    fd.append('ctx_user_agent', navigator.userAgent.slice(0, 200));
+    fd.append('ctx_session_id', (typeof _getSessionId === 'function') ? _getSessionId() : '');
+    fetch(_FEEDBACK_ENDPOINT, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } }).catch(() => {});
+  } catch(e) {}
+}
+window._quickRate = _quickRate;
+
 async function _submitFeedback(ev) {
   ev.preventDefault();
   const form = ev.target;
@@ -3549,6 +3622,7 @@ if (_hasVoiceSupport() || _canRunWhisper()) {
   if (vh) vh.style.display = 'inline';
 }
 _renderLikertButtons();
+_renderQuickScale();
 _renderDemographics();
 setLang(LANG);
 render();
