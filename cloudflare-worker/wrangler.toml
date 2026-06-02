@@ -6,10 +6,7 @@ compatibility_date = "2024-11-01"
 [ai]
 binding = "AI"
 
-# Shared "voice learning" dictionary (optional — the Worker no-ops without it).
-# To enable cross-user learning:
-#   1) wrangler kv namespace create VOICE_KV
-#   2) uncomment the three lines below and paste the printed id
-# [[kv_namespaces]]
-# binding = "VOICE_KV"
-# id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+# Shared "voice learning" dictionary — pooled cross-user sound→drug corrections.
+[[kv_namespaces]]
+binding = "VOICE_KV"
+id = "918b391e655a45b1b16c0588670473af"
