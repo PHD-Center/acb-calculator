@@ -2174,29 +2174,15 @@ function _voiceMatchDrugs(transcript) {
 }
 
 function _processVoiceCandidates(candidates) {
-  // Local-only matching — no external API. Collect drug candidates from BOTH
-  // the character-based fuzzy matcher and the phonetic matcher across ALL
-  // transcripts. Merge by drug, keeping each drug's best score across paths.
-  // If the top scorer is high-confidence exact, auto-add. Otherwise present
-  // a "did you mean?" picker with the top candidates so the user confirms.
+  // Local-only matching — no external API. Collect drug candidates from the
+  // character-based fuzzy matcher, the phonetic/Chinese-brand matcher, AND any
+  // learned correction; merge by drug (best score per drug); then ALWAYS show
+  // the "did you mean?" picker so the user confirms which drug. We never
+  // auto-add from voice — even an exact or previously-learned match is shown
+  // as the top option for a one-tap confirm.
   const drugInput = document.getElementById('drugInput');
 
-  // Path 0: learned-correction lookup — if this user has previously picked a
-  // specific drug for this STT pattern, jump straight to it.
-  const learned = _lookupVoiceCorrection(candidates);
-  if (learned) {
-    if (!selected.find(d => d.atc === learned.atc && d.name === learned.name)) {
-      selected.push(learned);
-      render();
-      drugInput.value = '';
-      _showToast((LANG === 'zh' ? '已加入(已學會):' : 'Added (learned): ') + learned.name);
-    }
-    _stopVoiceInput();
-    return;
-  }
-
   const scoreByAtc = new Map();    // atc → { drug, score, source, kind }
-
   const note = (drug, score, source, kind) => {
     const existing = scoreByAtc.get(drug.atc);
     if (!existing || score > existing.score) {
@@ -2204,7 +2190,11 @@ function _processVoiceCandidates(candidates) {
     }
   };
 
-  // Path 1: character-based fuzzy on each transcript
+  // Learned correction → surface at the TOP of the picker (no longer auto-added)
+  const learned = _lookupVoiceCorrection(candidates);
+  if (learned) note(learned, 150, candidates[0] || '', 'learned');
+
+  // Path 1: character-based fuzzy on each transcript (generic names only)
   for (const transcript of candidates) {
     const cands = _fuzzyMatchOCR(transcript);
     const top = window._lastSrcTop || new Map();
@@ -2215,7 +2205,7 @@ function _processVoiceCandidates(candidates) {
       note(c.drug, c.score, transcript, 'char');
     }
   }
-  // Path 2: phonetic matching on each transcript
+  // Path 2: phonetic + Chinese-brand matching on each transcript
   for (const transcript of candidates) {
     const phMatches = _voiceMatchDrugs(transcript);
     for (const m of phMatches) note(m.drug, m.score, transcript, 'phonetic');
@@ -2234,30 +2224,12 @@ function _processVoiceCandidates(candidates) {
       norm(o.drug.name).includes(cn));
   });
 
-  // Auto-add only when the top scorer is very confident (≥100 = exact match)
-  // AND has a clear lead over the second candidate (>10 points). Otherwise
-  // show the picker to let the user confirm.
-  const top1 = ranked[0];
-  const top2 = ranked[1];
-  const confident = top1 && top1.score >= 100 && (!top2 || (top1.score - top2.score) >= 10);
-
-  if (confident) {
-    if (!selected.find(d => d.atc === top1.drug.atc && d.name === top1.drug.name)) {
-      selected.push(top1.drug);
-      render();
-      drugInput.value = '';
-      _showToast((LANG === 'zh' ? '已加入:' : 'Added: ') + top1.drug.name);
-    }
-    _stopVoiceInput();
-    return;
-  }
-
-  // Ambiguous — show picker with top 5 candidates so user confirms
+  // ALWAYS show the picker so the user confirms which drug — never auto-add.
   const topN = ranked.slice(0, 5);
   if (topN.length > 0) {
     _showVoicePicker(topN, candidates);
   } else {
-    // Nothing matched at all — drop transcript into search box for manual
+    // Nothing matched at all — drop transcript into the search box for manual entry
     _stopVoiceInput();
     drugInput.value = candidates[0] || '';
     if (typeof runSearch === 'function') runSearch();
