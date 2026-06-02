@@ -454,8 +454,6 @@
               style="display:none;">
         <span>🎤</span> <span id="voiceBtnLabel">語音輸入</span>
       </button>
-      <span id="ocrHintEl" class="text-xs text-slate-400">支援中英文藥歷影像(直接螢幕截圖效果最佳)</span>
-      <span id="voiceHintEl" class="text-xs text-slate-400" style="display:none;">點 🎤 說出藥名 · 以雲端 AI 辨識(語音會上傳轉寫,不另存)</span>
       <input type="file" id="ocrFile" accept="image/*" capture="environment" style="display:none;" onchange="runOCR(this.files[0])">
     </div>
     <p id="methodNoteEl" class="text-xs text-slate-500 mt-2 italic">外用劑型 (topical) 不計入;吸入劑 (inhaled) 仍計入(因有系統性吸收且與心血管事件相關)。</p>
@@ -1981,14 +1979,8 @@ function _startVoiceInput() {
           interim += result[0].transcript;
         }
       }
-      if (interim) interimByLang[lang] = interim;
-      // Show both interim streams side by side so user sees both languages working
-      const zhPart = interimByLang['zh-TW'];
-      const enPart = interimByLang['en-US'];
-      const parts = [];
-      if (zhPart) parts.push('🇹🇼 ' + zhPart);
-      if (enPart) parts.push('🇺🇸 ' + enPart);
-      transcript.innerHTML = parts.join('<br>');
+      // Interim transcript intentionally NOT shown — raw STT output is often
+      // garbled/confusing; we only ever surface matched drug names in the picker.
     };
     r.onerror = (ev) => {
       // Silently note errors per language — the other may still succeed
@@ -2230,11 +2222,12 @@ function _processVoiceCandidates(candidates) {
   if (topN.length > 0) {
     _showVoicePicker(topN, candidates);
   } else {
-    // Nothing matched at all — drop transcript into the search box for manual entry
+    // Nothing matched — do NOT surface the raw (often garbled) transcript. Just
+    // close and let the user retry or type; leave the search box empty + focused.
     _stopVoiceInput();
-    drugInput.value = candidates[0] || '';
-    if (typeof runSearch === 'function') runSearch();
-    _showToast(t('voiceHeard') + ': ' + (candidates[0] || ''));
+    drugInput.value = '';
+    drugInput.focus();
+    _showToast(LANG === 'zh' ? '沒聽清楚,請再說一次或手動輸入' : "Didn't catch that — please try again or type it");
   }
 }
 
@@ -2246,10 +2239,10 @@ function _showVoicePicker(ranked, transcripts) {
   const listEl = document.getElementById('voicePickerList');
   const heardEl = document.getElementById('voicePickerHeard');
   if (!pickerEl || !listEl) return;
-  // Show ALL transcript variations so user knows what STT heard
+  // Keep the raw transcripts ONLY for the learning stash — never show them to
+  // the user (STT output is often garbled). The picker shows matched drugs only.
   const uniqHeard = [...new Set(transcripts.filter(Boolean))].slice(0, 4);
-  heardEl.textContent = (LANG === 'zh' ? '辨識到:' : 'Heard: ') + uniqHeard.join(' / ');
-  // Stash transcripts so _voicePickerSelect can save them as learned corrections
+  if (heardEl) heardEl.textContent = '';
   window._voicePickerTranscripts = uniqHeard;
   // Build clickable list
   window._voicePickerData = ranked;
@@ -2262,7 +2255,7 @@ function _showVoicePicker(ranked, transcripts) {
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div>
             <div class="text-sm font-medium text-slate-900">${m.drug.name}</div>
-            <div class="text-xs text-slate-500" style="margin-top:2px;">ACB ${m.drug.ACB ?? '–'} · ${m.source}</div>
+            <div class="text-xs text-slate-500" style="margin-top:2px;">ACB ${m.drug.ACB ?? '–'}</div>
           </div>
           <span class="text-xs" style="color:var(--brand-600);font-weight:600;">${scoreLabel}</span>
         </div>
@@ -2288,12 +2281,8 @@ function _voicePickerSelect(i) {
 
 function _voicePickerNone() {
   const drugInput = document.getElementById('drugInput');
-  // Use top transcript as a starting point in the search box so user can edit
-  const transcript = document.getElementById('voicePickerHeard')?.textContent
-                     .replace(/^(辨識到:|Heard: )/, '').split(' / ')[0] || '';
   _stopVoiceInput();
-  drugInput.value = transcript;
-  if (typeof runSearch === 'function') runSearch();
+  drugInput.value = '';   // don't prefill the raw transcript — just let the user type
   drugInput.focus();
 }
 
