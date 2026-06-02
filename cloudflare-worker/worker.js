@@ -104,22 +104,35 @@ async function handleCorrections(request, env, origin) {
   if (request.method === 'POST') {
     let body;
     try { body = await request.json(); } catch (e) { return Response.json({ error: 'bad json' }, { status: 400, headers: H }); }
-    const key = String(body.key || '').slice(0, 64);
-    const atc = String(body.atc || '').slice(0, 16);
-    const name = String(body.name || '').slice(0, 80);
-    if (!key || !atc) return Response.json({ error: 'missing key/atc' }, { status: 400, headers: H });
+
+    // Accept either a single vote {key,atc,name} or a batch {items:[...]}. The
+    // batch path does ONE read-modify-write so many entries can't clobber each
+    // other (KV has no atomic increment — rapid per-item writes would lose
+    // updates). weight is clamped 1–2: an everyday single pick is 1 vote; a
+    // deliberate "sync my training" sends 2 so it crosses the serve threshold
+    // immediately, while casual single picks still need a 2nd person to agree.
+    const weight = Math.min(2, Math.max(1, parseInt(body.weight, 10) || 1));
+    let items = Array.isArray(body.items) ? body.items : [{ key: body.key, atc: body.atc, name: body.name }];
+    items = items.slice(0, 2000);
 
     const raw = await env.VOICE_KV.get(DICT_KEY);
     const dict = raw ? JSON.parse(raw) : {};
-    if (!dict[key] && Object.keys(dict).length >= MAX_KEYS) {
-      return Response.json({ ok: false, full: true }, { headers: H });   // dictionary at cap
+    let applied = 0;
+    for (const it of items) {
+      const key = String((it && it.key) || '').slice(0, 64);
+      const atc = String((it && it.atc) || '').slice(0, 16);
+      const name = String((it && it.name) || '').slice(0, 80);
+      if (!key || !atc) continue;
+      if (!dict[key] && Object.keys(dict).length >= MAX_KEYS) continue;   // at cap — skip new keys
+      if (!dict[key]) dict[key] = {};
+      if (!dict[key][atc]) dict[key][atc] = { name, n: 0 };
+      dict[key][atc].n += weight;
+      dict[key][atc].name = name;
+      applied++;
     }
-    if (!dict[key]) dict[key] = {};
-    if (!dict[key][atc]) dict[key][atc] = { name, n: 0 };
-    dict[key][atc].n++;
-    dict[key][atc].name = name;
+    if (!applied) return Response.json({ error: 'no valid items' }, { status: 400, headers: H });
     await env.VOICE_KV.put(DICT_KEY, JSON.stringify(dict));
-    return Response.json({ ok: true }, { headers: H });
+    return Response.json({ ok: true, applied }, { headers: H });
   }
 
   return new Response('Method Not Allowed', { status: 405, headers: H });

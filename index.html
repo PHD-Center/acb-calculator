@@ -2648,21 +2648,22 @@ window._loadSharedCorrections = _loadSharedCorrections;
 async function _syncLocalToShared() {
   const url = _correctionsUrl();
   if (!url) return 0;
+  try { if (localStorage.getItem('acb-voice-bulksynced') === '1') return 0; } catch(e) {}   // one-time backfill
   const data = _getVoiceCorrections();
-  let synced = {};
-  try { synced = JSON.parse(localStorage.getItem('acb-voice-synced') || '{}'); } catch(e) {}
-  let n = 0;
-  for (const key in data) {
-    const v = data[key];
-    if (!v || !v.atc || synced[key]) continue;
-    try {
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: key, atc: v.atc, name: v.name }) });
-      synced[key] = 1; n++;
-    } catch(e) { /* network hiccup — leave unsynced so a later run retries it */ }
-  }
-  try { localStorage.setItem('acb-voice-synced', JSON.stringify(synced)); } catch(e) {}
-  return n;
+  const items = [];
+  for (const key in data) { const v = data[key]; if (v && v.atc) items.push({ key: key, atc: v.atc, name: v.name }); }
+  if (!items.length) return 0;
+  try {
+    // ONE batched request (server does a single read-modify-write so the entries
+    // can't clobber each other), weight 2 so this curated backfill is effective
+    // for everyone immediately.
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: items, weight: 2 }) });
+    if (!resp.ok) return 0;
+    const r = await resp.json().catch(() => ({}));
+    try { localStorage.setItem('acb-voice-bulksynced', '1'); } catch(e) {}
+    return (typeof r.applied === 'number') ? r.applied : items.length;
+  } catch(e) { return 0; }
 }
 window._syncLocalToShared = _syncLocalToShared;
 
@@ -2696,8 +2697,8 @@ function _manageVoiceCorrections() {
     if (confirm(syncMsg)) {
       _syncLocalToShared().then(n => {
         alert(LANG === 'zh'
-          ? `已送出 ${n} 筆到共用字典。\n每筆算 1 票,需有其他人也選到同一發音(門檻 2 票)才會對全體生效。`
-          : `Sent ${n} mapping(s) to the shared dictionary.\nEach counts as 1 vote; a mapping is served to everyone once a 2nd person independently confirms it (threshold 2).`);
+          ? (n > 0 ? `已同步 ${n} 筆到共用字典,並立即對全體生效。` : '已同步過了(不重複送出),或此瀏覽器沒有可同步的記憶。')
+          : (n > 0 ? `Synced ${n} mapping(s) to the shared dictionary — effective for everyone now.` : 'Already synced (not re-sent), or nothing to sync in this browser.'));
       });
       return;
     }
