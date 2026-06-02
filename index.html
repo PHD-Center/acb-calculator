@@ -1717,6 +1717,7 @@ function render() {
     fbNudge.style.display = show ? 'block' : 'none';
     fbNudge.classList.toggle("hidden", !show);
   }
+  _armSurveyTimer();   // auto-open the full survey ~5s after the drug list settles
   $("emptyState").classList.toggle("hidden", !!selected.length);
   // Update print-only date stamp (locale-aware, falls back gracefully)
   if (selected.length) {
@@ -2886,6 +2887,38 @@ function _openFeedbackAfterPrint() {
 }
 window.addEventListener('afterprint', _openFeedbackAfterPrint);
 window._printThenFeedback = _printThenFeedback;
+
+// Auto-open the FULL survey a few seconds after the user has results — on every
+// device (desktop + mobile), for everyone (not just those who export). Debounced:
+// the 5s timer resets whenever the drug list changes (called from render()), so
+// it fires ~5s after the user STOPS editing. By then the drug list is settled —
+// and because the survey reads `selected` live at submit time, the recorded
+// drugs always reflect the final set before they close. Opens at most once per
+// session and never after a submit. (Still closeable via ✕/backdrop/ESC.)
+let _surveyTimer = null;
+function _armSurveyTimer() {
+  try {
+    if (sessionStorage.getItem('acb-fb-prompted') === '1') return;
+    if (sessionStorage.getItem('acb-fb-submitted') === '1') return;
+  } catch(e) {}
+  if (typeof selected === 'undefined' || !selected.length) {
+    if (_surveyTimer) { clearTimeout(_surveyTimer); _surveyTimer = null; }
+    return;
+  }
+  if (_surveyTimer) clearTimeout(_surveyTimer);
+  _surveyTimer = setTimeout(_autoOpenSurvey, 5000);
+}
+function _autoOpenSurvey() {
+  _surveyTimer = null;
+  try {
+    if (sessionStorage.getItem('acb-fb-submitted') === '1') return;
+    if (sessionStorage.getItem('acb-fb-prompted') === '1') return;
+    sessionStorage.setItem('acb-fb-prompted', '1');
+  } catch(e) {}
+  if (typeof selected !== 'undefined' && !selected.length) return;
+  const card = document.getElementById('feedbackCard');
+  if (card) card.classList.remove('hidden');
+}
 
 // Lazy-load chi_tra worker — only invoked when English pass returns 0 drugs.
 // Adds ~3 s on Chinese-only images, free on English images.
