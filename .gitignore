@@ -12,3 +12,7 @@
 # Allow the voice-proxy Cloudflare Worker source (no secrets in here)
 !cloudflare-worker
 !cloudflare-worker/*
+
+# Node tests for the scoring and matching code (no data, no secrets)
+!tests
+!tests/*

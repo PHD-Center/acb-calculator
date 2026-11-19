@@ -14,9 +14,10 @@
 
 - **6 種評分量表整合**:ACB · ADS · GABS · m-ACB · KABS · ARS(介面內附各量表發表年代、作者、適用族群)
 - **122 種台灣常見藥物資料庫**(來源:PHDc)
+- **其他健保藥品也可輸入**:抗膽鹼量表以外的健保給付成分(約 1,300 種,名稱與 ATC 代碼取自 WHO ATC/DDD Index)可直接輸入,供下方整體用藥檢視計算;這些藥物在量表欄顯示「–」,不計入量表總分
 - **中英文商品名搜尋**:整合健保藥品資料庫 (NHI_ATCcode) 共 5,400 餘筆品牌名稱(英文 ≈2,300、中文 ≈3,150)
 - **拍照/上傳藥歷影像辨識**:整合 Tesseract.js OCR 直接辨識並自動加入,無需手動勾選。
-- **語音輸入**:點「🎤 語音輸入」說出藥名即可加入;預設使用瀏覽器內建辨識,辨識不確定時提供「您要找的是?」清單供確認(選後系統會記住該發音)。可勾選「🎯 精準語音」改用**雲端 Whisper AI**(由本工具自建的 Cloudflare Workers AI 代理執行,使用者無須任何設定)提高藥名辨識準確度 — 此模式辨識時會將語音上傳轉寫(不另存)。
+- **語音輸入**:點「🎤 語音輸入」說出藥名(可一次說多個,含劑量、中英混講皆可),勾選列出的藥物後一次加入;中文商品名以發音比對,簡體字或同音字輸出也能對上;預設使用瀏覽器內建辨識,辨識不確定時提供「您要找的是?」清單供確認(選後系統會記住該發音)。可勾選「🎯 精準語音」改用**雲端 Whisper AI**(由本工具自建的 Cloudflare Workers AI 代理執行,使用者無須任何設定)提高藥名辨識準確度 — 此模式辨識時會將語音上傳轉寫(不另存)。
 - **一頁式報表列印 / PDF 匯出**:評估完成後,「🖨️ 列印 / 匯出 PDF」可叫出瀏覽器原生列印對話框,選擇「另存為 PDF」即得精美病歷報表。
 - **引用本工具**:若以本工具計算結果用於研究、報告或臨床指引,可於介面中「📚 引用此工具」取得 JAMA / BibTeX / RIS 格式引用網站。
 - **使用回饋(可選,匿名)**:右下角「📝 給我們回饋」可填寫 5 題量性 + 1 題質性問卷(對應 SUS、TAM、UTAUT、Sittig & Singh framework),供工具改進與後續研究使用。
@@ -35,7 +36,13 @@
   - ACB ≥3 → ×2.2 倍
   - ACB ≥5 → ×2.7 倍
   - ACB ≥10 → ×3 倍
-- **同類藥物重複用藥提醒**(依 ATC level 4 偵測)
+- **重複用藥提醒**:同一藥品輸入兩次,或兩個藥品屬同一 ATC 第 4 層
+- **整體用藥檢視**(由同一份清單計算,每項附出處):
+  - **Drug Burden Index**:Hilmer 2007 公式,藥物清單與最低有效劑量 δ 採 Byrne 2018 愛爾蘭全國版清單(Supplementary Table S1,數值未更動);需輸入每日劑量,只詢問清單中的 DBI 藥物
+  - **鎮靜負擔 (sedative load)**:Linjakumpu 2003 模型及 Taipale 2011 更新,依 Taipale 2012 Table 8;分組 0、1–2、≥3
+  - **跌倒風險藥物 (FRIDs)**:STOPPFall 14 類(Seppala 2021),ATC 代碼依 Doyle 2025
+  - **Polypharmacy**:≥5 種 polypharmacy、≥10 種 excessive polypharmacy(Masnoon 2017)
+  - 來源未涵蓋的藥物(例如 DBI 清單沒有最低劑量者)會標示「無法計算」,不做推估
 - **亞洲族群量表 (m-ACB / KABS) 偏高警示**:當亞洲量表分數明顯高於 ACB 時提示可能低估
 - **逐藥替代建議**:對 ACB=3 高負擔藥物,個別列出同類較低負擔可考慮藥物;若無同類替代則明確告知
 - **中英雙語介面**:右上角即時切換中文 / English (British),所有風險敘述、分級、替代建議、文獻摘要與警示訊息皆完整翻譯;偏好儲存於 localStorage
@@ -47,6 +54,14 @@
 > Yang A S-H, Fan Chiang H-Y, Tsai D H-T, Chuang A T-M, Lai E C-C. **Association Between Pneumonia Risk and Anticholinergic Burden Among Patients with Different Frailty Levels.** *Clin Epidemiol.* 2025 Sep 30;17:787–796.
 
 > Tsai M-J, Su C T-T, Sung S-F, Yang H-Y, Cheng M C-Y, Chuang A T-M, Shao S-C, Lai E C-C. **Transient anticholinergic burden and out-of-hospital cardiac arrest: a case-crossover study.** *Eur Heart J.* 2025;46(47):5143–5156. doi:10.1093/eurheartj/ehaf723
+
+### 整體用藥檢視文獻
+
+- **DBI** Hilmer SN, et al. *Arch Intern Med.* 2007;167(8):781–787. doi:10.1001/archinte.167.8.781 · δ 與藥物清單:Byrne CJ, et al. *BMJ Open.* 2018;8(7):e022500. doi:10.1136/bmjopen-2018-022500
+- **Sedative load** Linjakumpu T, et al. *Int J Geriatr Psychiatry.* 2003;18(6):542–544. doi:10.1002/gps.846 · Taipale HT, et al. *Drugs Aging.* 2011;28(11):913–925. doi:10.2165/11597800-000000000-00000 · Taipale H. 博士論文, University of Eastern Finland, 2012 (ISBN 978-952-61-0787-5)
+- **STOPPFall** Seppala LJ, et al. *Age Ageing.* 2021;50(4):1189–1199. doi:10.1093/ageing/afaa249 · ATC 代碼:Doyle K, et al. *Age Ageing.* 2025;54(5):afaf138. doi:10.1093/ageing/afaf138
+- **Polypharmacy** Masnoon N, et al. *BMC Geriatr.* 2017;17(1):230. doi:10.1186/s12877-017-0621-2
+- **ATC 分類** WHO Collaborating Centre for Drug Statistics Methodology, ATC/DDD Index
 
 ### 評分量表原始文獻
 
