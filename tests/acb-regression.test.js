@@ -32,14 +32,18 @@ if (process.argv[2] === '--write') {
   const want = JSON.parse(fs.readFileSync(golden, 'utf8'));
   const app = load();
   let fail = 0;
+  // Documented corrections since the golden file: names only, scores must stay identical.
+  // L04AD01 is ciclosporin in the WHO ATC index; the PHDc entry was labelled Voclosporin (2026-11).
+  const RENAMED = { 'L04AD01|Voclosporin': 'Ciclosporin' };
+  const expected = want.drugs.map(r => RENAMED[r[1] + '|' + r[0]] ? [RENAMED[r[1] + '|' + r[0]]].concat(r.slice(1)) : r);
   const now = app.DRUGS.map(d => [d.name, d.atc, d.ACB, d.ADS, d.GABS, d.mACB, d.KABS, d.ARS]);
-  if (JSON.stringify(now) !== JSON.stringify(want.drugs)) { console.log('FAIL: the 122-drug scale table changed'); fail++; }
+  if (JSON.stringify(now) !== JSON.stringify(expected)) { console.log('FAIL: the 122-drug scale table changed'); fail++; }
   const got = scores(app);
   got.forEach((g, i) => {
     const ok = JSON.stringify(g.totals) === JSON.stringify(want.lists[i].totals);
     if (!ok) fail++;
     console.log((ok ? 'same ' : 'DIFF ') + g.names.join(' + ') + ' -> ' + JSON.stringify(g.totals));
   });
-  console.log(fail ? `ACB regression: ${fail} failure(s)` : `ACB regression: all ${got.length} lists identical to before, drug table unchanged`);
+  console.log(fail ? `ACB regression: ${fail} failure(s)` : `ACB regression: all ${got.length} lists identical to before, drug table unchanged apart from the documented rename`);
   process.exit(fail ? 1 : 0);
 }
